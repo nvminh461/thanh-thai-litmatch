@@ -61,33 +61,18 @@ export const defaultCardRate: RateConfig = {
 };
 
 export const packagePrices = [
-  10000,
-  50000,
-  100000,
-  200000,
-  300000,
-  400000,
-  1000000,
-  2000000,
-  3000000,
-  5000000,
-  10000000,
-  20000000,
+  10000, 50000, 100000, 200000, 300000, 400000, 500000, 1000000, 2000000,
+  3000000, 5000000, 10000000,
 ];
 export const cardDenominations = [
-  10000,
-  20000,
-  30000,
-  50000,
-  100000,
-  200000,
-  300000,
-  500000,
-  1000000,
+  10000, 20000, 30000, 50000, 100000, 200000, 300000, 500000, 1000000,
 ];
 export const cardProviders = ["VIETTEL", "MOBIFONE", "VINAPHONE"];
 
-export function getCurrencyRate(rateConfig: RateConfig, rewardType: RewardType) {
+export function getCurrencyRate(
+  rateConfig: RateConfig,
+  rewardType: RewardType,
+) {
   return rewardType === "diamond" ? rateConfig.diamond : rateConfig.star;
 }
 
@@ -106,7 +91,11 @@ export function normalizeLitmatchId(value: string) {
 }
 
 export function normalizePaymentCodePrefix(value: string) {
-  return value.trim().toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 5);
+  return value
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "")
+    .slice(0, 5);
 }
 
 export function buildVietQrUrl(

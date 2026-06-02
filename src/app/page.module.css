@@ -295,12 +295,6 @@
   min-width: 0;
 }
 
-.stageColumn {
-  display: grid;
-  gap: 0;
-  min-width: 0;
-}
-
 .currencyTabs {
   position: relative;
   z-index: 3;
@@ -3039,9 +3033,9 @@
 
 .galaxyMasthead strong {
   color: #ffffff;
-  font-size: clamp(26px, 6vw, 46px);
+  font-size: clamp(22px, 4.2vw, 34px);
   font-weight: 950;
-  line-height: 0.95;
+  line-height: 1;
   text-shadow:
     0 0 22px rgba(192, 132, 252, 0.55),
     0 6px 26px rgba(4, 3, 14, 0.7);
@@ -3533,5 +3527,264 @@
 
   .actionDock {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Centered bank top-up layout */
+.contactIcon {
+  width: 100%;
+  height: 100%;
+  display: block;
+  border-radius: inherit;
+  object-fit: cover;
+}
+
+.galaxySignals a,
+.galaxySignals span {
+  overflow: hidden;
+  padding: 3px;
+}
+
+.pillImageIcon {
+  overflow: hidden;
+  border-radius: 999px;
+  padding: 2px;
+}
+
+.pillImageIcon .contactIcon {
+  width: 22px;
+  height: 22px;
+}
+
+.bankLayoutCenter,
+.cardLayoutCenter {
+  grid-template-columns: minmax(0, 1fr) !important;
+  justify-items: center;
+}
+
+.bankTopupDock,
+.cardTopupDock {
+  width: min(100%, 920px);
+  justify-self: center;
+  border-left-width: 1px;
+  padding: clamp(16px, 3vw, 28px);
+}
+
+.packageHeader {
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+  text-align: center;
+}
+
+.packageHeader .sectionIntro {
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: center;
+  gap: 8px;
+  text-align: center;
+}
+
+.packageHeader .sectionIntro p {
+  max-width: 42ch;
+}
+
+.currencyIconTabs {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 7px;
+  border: 1px solid rgba(216, 180, 254, 0.28);
+  border-radius: 999px;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.16), transparent 48%),
+    rgba(8, 6, 24, 0.7);
+  box-shadow:
+    inset 0 1px 12px rgba(255, 255, 255, 0.08),
+    0 14px 28px rgba(4, 3, 14, 0.32);
+}
+
+.currencyIconTab {
+  width: 62px;
+  height: 62px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(216, 180, 254, 0.34);
+  border-radius: 999px;
+  background:
+    radial-gradient(circle at 50% 35%, rgba(255, 255, 255, 0.16), transparent 42%),
+    linear-gradient(145deg, rgba(48, 24, 88, 0.92), rgba(18, 9, 42, 0.88));
+  box-shadow:
+    inset 0 1px 10px rgba(255, 255, 255, 0.1),
+    0 10px 20px rgba(4, 3, 14, 0.28);
+  color: #d8c7ff;
+  cursor: pointer;
+  transition:
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    transform 180ms ease,
+    filter 180ms ease;
+}
+
+.currencyIconTab .currencyTabIcon {
+  width: 34px;
+  height: 34px;
+  font-size: 31px;
+}
+
+.currencyIconTab:hover,
+.currencyIconTab:focus-visible {
+  border-color: rgba(250, 204, 21, 0.54);
+  outline: none;
+  transform: translateY(-2px);
+}
+
+.currencyIconTabActive {
+  border-color: rgba(250, 204, 21, 0.78);
+  background:
+    radial-gradient(circle at 50% 34%, rgba(255, 255, 255, 0.54) 0 17%, rgba(192, 132, 252, 0.82) 52%, rgba(49, 18, 92, 0.94) 100%);
+  box-shadow:
+    inset 0 0 18px rgba(255, 255, 255, 0.22),
+    0 16px 34px rgba(126, 34, 206, 0.48),
+    0 0 24px rgba(250, 204, 21, 0.22);
+  color: #fff7d6;
+}
+
+.bankRewardSummary {
+  width: min(100%, 620px);
+  display: grid;
+  justify-items: center;
+  gap: 5px;
+  margin: 2px auto 4px;
+  padding: 14px 16px;
+  border: 1px solid rgba(250, 204, 21, 0.28);
+  border-radius: 16px;
+  background:
+    linear-gradient(135deg, rgba(250, 204, 21, 0.11), rgba(192, 132, 252, 0.16)),
+    rgba(9, 7, 27, 0.58);
+  color: #fff9ff;
+  text-align: center;
+}
+
+.bankRewardSummary > span {
+  color: #d8c7ff;
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.bankRewardSummary strong {
+  color: #ffffff;
+  font-size: clamp(28px, 7vw, 44px);
+  font-weight: 950;
+  line-height: 1;
+  text-shadow:
+    0 0 18px rgba(192, 132, 252, 0.5),
+    0 8px 24px rgba(4, 3, 14, 0.62);
+}
+
+.bankRewardSummary small {
+  color: #fff2b8;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.bankTopupDock .packageGrid,
+.bankTopupDock .form,
+.cardTopupDock .cardTopupForm {
+  width: min(100%, 780px);
+  margin-inline: auto;
+}
+
+.bankTopupDock .packageGrid {
+  justify-content: center;
+}
+
+.bankTopupDock .actionDock {
+  width: min(100%, 700px);
+  align-items: stretch;
+  justify-content: center;
+  gap: 10px;
+  margin: 2px auto 0;
+}
+
+.bankTopupDock .actionDock > * {
+  min-width: 0;
+}
+
+.bankTopupDock .submitButton,
+.bankTopupDock .pillLink {
+  min-height: 54px;
+  border-radius: 14px;
+  padding-inline: 12px;
+}
+
+.bankTopupDock .submitButton {
+  font-size: 14px;
+  letter-spacing: 0.35px;
+}
+
+.bankTopupDock .pillLink {
+  font-size: 11px;
+  line-height: 1.15;
+}
+
+@media (min-width: 720px) {
+  .bankLayoutCenter {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .cardLayoutCenter {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .bankTopupDock .packageGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .bankTopupDock .actionDock {
+    width: min(100%, 760px);
+    grid-template-columns: minmax(160px, 1.18fr) repeat(3, minmax(130px, 1fr));
+    gap: 12px;
+  }
+}
+
+@media (max-width: 520px) {
+  .galaxySignals a,
+  .galaxySignals span {
+    padding: 2px;
+  }
+
+  .packageHeader {
+    gap: 12px;
+  }
+
+  .currencyIconTabs {
+    gap: 9px;
+  }
+
+  .currencyIconTab {
+    width: 54px;
+    height: 54px;
+  }
+
+  .currencyIconTab .currencyTabIcon {
+    width: 30px;
+    height: 30px;
+    font-size: 27px;
+  }
+
+  .bankRewardSummary {
+    padding: 12px;
+  }
+
+  .bankTopupDock .actionDock {
+    width: min(100%, 420px);
+  }
+}
+
+@media (max-width: 360px) {
+  .bankTopupDock .actionDock {
+    grid-template-columns: 1fr;
   }
 }

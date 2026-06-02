@@ -213,19 +213,19 @@ function getContactLinks(siteConfig: SiteConfig) {
   return [
     {
       href: getZaloUrl(siteConfig),
-      icon: "Z",
+      iconSrc: "/zalo.jpg",
       label: "Zalo",
       target: "_blank",
     },
     {
       href: siteConfig.facebookUrl.trim(),
-      icon: "f",
+      iconSrc: "/facebook.jpg",
       label: "Facebook",
       target: "_blank",
     },
     {
       href: getPhoneUrl(siteConfig),
-      icon: "☎",
+      iconSrc: "/phone.jpg",
       label: "Điện thoại",
       target: undefined,
     },
@@ -258,7 +258,6 @@ const fallingItems = [
   { className: styles.fallTwentyThree, icon: "☾" },
   { className: styles.fallTwentyFour, icon: "✺" },
 ];
-
 
 const currencyConfig = {
   diamond: {
@@ -638,10 +637,10 @@ function LifetimeBankQrModal({
                 IDLITMATCH
               </strong>
               <span>
-                Ví dụ: LMKC THANHTHAI 123456789 để nạp kim cương, LMSAO THANHTHAI
-                123456789 để nạp sao. Tên CTV chỉ dùng chữ/số không dấu, không
-                khoảng trắng. Hệ thống sẽ lấy ID ở cuối nội dung để kiểm tra và
-                tự nạp khi tiền về.
+                Ví dụ: LMKC THANHTHAI 123456789 để nạp kim cương, LMSAO
+                THANHTHAI 123456789 để nạp sao. Tên CTV chỉ dùng chữ/số không
+                dấu, không khoảng trắng. Hệ thống sẽ lấy ID ở cuối nội dung để
+                kiểm tra và tự nạp khi tiền về.
               </span>
             </div>
 
@@ -918,7 +917,9 @@ export default function HomeClient({
     setExistingLifetimeQr(null);
     setLifetimeQrError("");
     setLifetimeStatusMessage("");
-    setLifetimeTransferContent(getLifetimeTransferContentPrefix(lifetimeCurrency));
+    setLifetimeTransferContent(
+      getLifetimeTransferContentPrefix(lifetimeCurrency),
+    );
     setCopiedField("");
   }
 
@@ -928,7 +929,9 @@ export default function HomeClient({
     setExistingLifetimeQr(null);
     setLifetimeQrError("");
     setLifetimeStatusMessage("");
-    setLifetimeTransferContent(getLifetimeTransferContentPrefix(lifetimeCurrency));
+    setLifetimeTransferContent(
+      getLifetimeTransferContentPrefix(lifetimeCurrency),
+    );
     setCopiedField("");
   }
 
@@ -937,7 +940,9 @@ export default function HomeClient({
     setExistingLifetimeQr(null);
     setLifetimeQrError("");
     setLifetimeStatusMessage("");
-    setLifetimeTransferContent(getLifetimeTransferContentPrefix(lifetimeCurrency));
+    setLifetimeTransferContent(
+      getLifetimeTransferContentPrefix(lifetimeCurrency),
+    );
     setCopiedField("");
   }
 
@@ -1319,8 +1324,8 @@ export default function HomeClient({
       >
         <div className={styles.galaxyMasthead}>
           <div>
-            <span>{dealerName}</span>
-            <strong>Litmatch Galaxy</strong>
+            <span>NẠP LITMATCH</span>
+            <strong>{dealerName}</strong>
           </div>
           <div className={styles.galaxySignals}>
             {contactLinks.map((link) => (
@@ -1331,7 +1336,13 @@ export default function HomeClient({
                 rel={link.target ? "noopener noreferrer" : undefined}
                 target={link.target}
               >
-                {link.icon}
+                <Image
+                  alt=""
+                  className={styles.contactIcon}
+                  height={26}
+                  src={link.iconSrc}
+                  width={26}
+                />
               </a>
             ))}
           </div>
@@ -1551,79 +1562,68 @@ export default function HomeClient({
               ☾
             </span>
 
-            <div className={styles.cardLayout}>
-              <div className={styles.rewardStage}>
-                <p className={styles.eyebrow}>Nạp thẻ cào</p>
-                <h1 className={styles.stageTitle}>Nạp Thẻ Cào</h1>
-                <div className={styles.rewardToken}>
-                  <span
-                    className={`${styles.rewardIcon} ${
-                      cardCurrency === "star"
-                        ? styles.starIcon
-                        : styles.diamondIcon
-                    }`}
-                    aria-hidden="true"
-                  >
-                    {cardActive.icon}
-                  </span>
-                </div>
-                <div className={styles.rewardAmount}>
-                  <span>Thực nhận dự kiến</span>
-                  <strong>{formatNumber(cardReceiveAmount)}</strong>
-                  <small>{cardActive.receiveLabel}</small>
-                </div>
-                <div className={styles.stageMeter}>
-                  1.000 đ ={" "}
-                  {formatNumber(getCurrencyRate(cardRateConfig, cardCurrency))}{" "}
-                  {cardActive.receiveLabel}
-                </div>
-              </div>
-
-              <div className={styles.guidedDock}>
-                <div className={styles.sectionIntro}>
-                  <span className={styles.dockStep}>CARD</span>
-                  <div>
-                    <h2>Điền thông tin thẻ</h2>
-                    <p>Mệnh giá, chiết khấu và phần nhận dự kiến.</p>
+            <div className={`${styles.cardLayout} ${styles.cardLayoutCenter}`}>
+              <div
+                className={`${styles.guidedDock} ${styles.cardTopupDock}`}
+                id={`${tabBaseId}-card-panel-${cardCurrency}`}
+                role="tabpanel"
+                aria-labelledby={`${tabBaseId}-card-${cardCurrency}`}
+              >
+                <div className={styles.packageHeader}>
+                  <div className={styles.sectionIntro}>
+                    <span className={styles.dockStep}>CARD</span>
+                    <div>
+                      <h2>Điền thông tin thẻ</h2>
+                      <p>Mệnh giá, chiết khấu và phần nhận dự kiến.</p>
+                    </div>
                   </div>
-                </div>
 
-                <div
-                  className={styles.cardRewardTabs}
-                  role="tablist"
-                  aria-label="Loại nhận khi nạp thẻ cào"
-                >
-                  {(Object.keys(currencyConfig) as CurrencyType[]).map(
-                    (type) => {
-                      const isActive = cardCurrency === type;
-                      const config = currencyConfig[type];
+                  <div
+                    className={styles.currencyIconTabs}
+                    role="tablist"
+                    aria-label="Loại nhận khi nạp thẻ cào"
+                  >
+                    {(Object.keys(currencyConfig) as CurrencyType[]).map(
+                      (type) => {
+                        const isActive = cardCurrency === type;
+                        const config = currencyConfig[type];
+                        const tabId = `${tabBaseId}-card-${type}`;
+                        const panelId = `${tabBaseId}-card-panel-${type}`;
 
-                      return (
-                        <button
-                          aria-selected={isActive}
-                          className={`${styles.cardRewardButton}${
-                            isActive ? ` ${styles.cardRewardButtonActive}` : ""
-                          }`}
-                          key={type}
-                          role="tab"
-                          type="button"
-                          onClick={() => setCardCurrency(type)}
-                        >
-                          <span
-                            className={`${styles.inlineIcon} ${
-                              type === "star"
-                                ? styles.starIcon
-                                : styles.diamondIcon
+                        return (
+                          <button
+                            aria-controls={panelId}
+                            aria-label={`Nhận ${config.label}`}
+                            aria-selected={isActive}
+                            className={`${styles.currencyIconTab}${
+                              isActive ? ` ${styles.currencyIconTabActive}` : ""
                             }`}
-                            aria-hidden="true"
+                            id={tabId}
+                            key={type}
+                            role="tab"
+                            tabIndex={isActive ? 0 : -1}
+                            title={`Nhận ${config.label}`}
+                            type="button"
+                            onClick={() => setCardCurrency(type)}
                           >
-                            {config.icon}
-                          </span>
-                          Nhận {config.label}
-                        </button>
-                      );
-                    },
-                  )}
+                            <span
+                              className={`${styles.currencyTabIcon}${
+                                type === "star"
+                                  ? ` ${styles.currencyTabIconStar}`
+                                  : ""
+                              }`}
+                              aria-hidden="true"
+                            >
+                              {config.icon}
+                            </span>
+                            <span className={styles.visuallyHidden}>
+                              {config.label}
+                            </span>
+                          </button>
+                        );
+                      },
+                    )}
+                  </div>
                 </div>
 
                 <form
@@ -1776,94 +1776,67 @@ export default function HomeClient({
           </div>
         ) : (
           <div className={styles.arcadeBoard}>
-            <div className={styles.bankLayout}>
-              <div className={styles.stageColumn}>
-                <div
-                  className={styles.currencyTabs}
-                  role="tablist"
-                  aria-label="Loại nạp"
-                >
-                  {(Object.keys(currencyConfig) as CurrencyType[]).map(
-                    (type) => {
-                      const config = currencyConfig[type];
-                      const isActive = currency === type;
-                      const tabId = `${tabBaseId}-${type}`;
-                      const panelId = `${tabBaseId}-panel-${type}`;
-
-                      return (
-                        <button
-                          key={type}
-                          id={tabId}
-                          aria-controls={panelId}
-                          aria-selected={isActive}
-                          className={
-                            isActive
-                              ? styles.currencyTabActive
-                              : styles.currencyTab
-                          }
-                          type="button"
-                          role="tab"
-                          tabIndex={isActive ? 0 : -1}
-                          onClick={() => setCurrency(type)}
-                        >
-                          <span
-                            className={`${styles.currencyTabIcon}${
-                              type === "star"
-                                ? ` ${styles.currencyTabIconStar}`
-                                : ""
-                            }`}
-                            aria-hidden="true"
-                          >
-                            {config.icon}
-                          </span>
-                          <span>{config.label}</span>
-                        </button>
-                      );
-                    },
-                  )}
-                </div>
-
-                <div className={styles.rewardStage}>
-                  <p className={styles.eyebrow}>Nạp Litmatch</p>
-                  <h1 className={styles.stageTitle}>
-                    Nạp <span>{active.title}</span>
-                  </h1>
-                  <div className={styles.rewardToken}>
-                    <span
-                      className={`${styles.rewardIcon} ${
-                        currency === "star"
-                          ? styles.starIcon
-                          : styles.diamondIcon
-                      }`}
-                      aria-hidden="true"
-                    >
-                      {active.icon}
-                    </span>
-                  </div>
-                  <div className={styles.rewardAmount}>
-                    <span>Thực nhận</span>
-                    <strong>{formatNumber(receiveAmount)}</strong>
-                    <small>{active.receiveLabel}</small>
-                  </div>
-                  <div className={styles.stageMeter}>
-                    1.000 đ ={" "}
-                    {formatNumber(getCurrencyRate(bankRateConfig, currency))}{" "}
-                    {active.receiveLabel}
-                  </div>
-                </div>
-              </div>
-
+            <div className={`${styles.bankLayout} ${styles.bankLayoutCenter}`}>
               <div
-                className={styles.guidedDock}
+                className={`${styles.guidedDock} ${styles.bankTopupDock}`}
                 id={`${tabBaseId}-panel-${currency}`}
                 role="tabpanel"
                 aria-labelledby={`${tabBaseId}-${currency}`}
               >
-                <div className={styles.sectionIntro}>
-                  <span className={styles.dockStep}>01</span>
-                  <div>
-                    <h2>Chọn gói nạp</h2>
-                    <p>Gói nạp nhanh và số tiền tùy chỉnh.</p>
+                <div className={styles.packageHeader}>
+                  <div className={styles.sectionIntro}>
+                    <span className={styles.dockStep}>01</span>
+                    <div>
+                      <h2>Chọn gói nạp</h2>
+                      <p>Gói nạp nhanh và số tiền tùy chỉnh.</p>
+                    </div>
+                  </div>
+
+                  <div
+                    className={styles.currencyIconTabs}
+                    role="tablist"
+                    aria-label="Loại nạp"
+                  >
+                    {(Object.keys(currencyConfig) as CurrencyType[]).map(
+                      (type) => {
+                        const config = currencyConfig[type];
+                        const isActive = currency === type;
+                        const tabId = `${tabBaseId}-${type}`;
+                        const panelId = `${tabBaseId}-panel-${type}`;
+
+                        return (
+                          <button
+                            key={type}
+                            id={tabId}
+                            aria-controls={panelId}
+                            aria-label={`Nạp ${config.label}`}
+                            aria-selected={isActive}
+                            className={`${styles.currencyIconTab}${
+                              isActive ? ` ${styles.currencyIconTabActive}` : ""
+                            }`}
+                            title={`Nạp ${config.label}`}
+                            type="button"
+                            role="tab"
+                            tabIndex={isActive ? 0 : -1}
+                            onClick={() => setCurrency(type)}
+                          >
+                            <span
+                              className={`${styles.currencyTabIcon}${
+                                type === "star"
+                                  ? ` ${styles.currencyTabIconStar}`
+                                  : ""
+                              }`}
+                              aria-hidden="true"
+                            >
+                              {config.icon}
+                            </span>
+                            <span className={styles.visuallyHidden}>
+                              {config.label}
+                            </span>
+                          </button>
+                        );
+                      },
+                    )}
                   </div>
                 </div>
 
@@ -1956,10 +1929,7 @@ export default function HomeClient({
                     </p>
                   ) : null}
 
-                  <nav
-                    className={styles.actionDock}
-                    aria-label="Hành động nạp"
-                  >
+                  <nav className={styles.actionDock} aria-label="Hành động nạp">
                     <button
                       className={styles.submitButton}
                       type="submit"
@@ -1998,19 +1968,37 @@ export default function HomeClient({
                         target="_blank"
                         rel="noopener noreferrer"
                       >
-                        <span className={styles.pillIcon} aria-hidden="true">
-                          Z
+                        <span
+                          className={`${styles.pillIcon} ${styles.pillImageIcon}`}
+                          aria-hidden="true"
+                        >
+                          <Image
+                            alt=""
+                            className={styles.contactIcon}
+                            height={22}
+                            src="/zalo.jpg"
+                            width={22}
+                          />
                         </span>
-                        Liên hệ
+                        GROUP CSKH
                       </a>
                     ) : (
                       <span
                         className={`${styles.pillLink} ${styles.pillStatic}`}
                       >
-                        <span className={styles.pillIcon} aria-hidden="true">
-                          Z
+                        <span
+                          className={`${styles.pillIcon} ${styles.pillImageIcon}`}
+                          aria-hidden="true"
+                        >
+                          <Image
+                            alt=""
+                            className={styles.contactIcon}
+                            height={22}
+                            src="/zalo.jpg"
+                            width={22}
+                          />
                         </span>
-                        Liên hệ
+                        GROUP CSKH
                       </span>
                     )}
                   </nav>
