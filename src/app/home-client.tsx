@@ -193,6 +193,9 @@ const defaultSiteConfig: SiteConfig = {
   announcementText: "",
 };
 
+const dealerAvatarUrl =
+  "https://activity.static.ksztagent.com/4dc3d17e-746f-11f0-b306-5254007d7f21";
+
 function getDealerName(siteConfig: SiteConfig) {
   return siteConfig.dealerName.trim() || defaultSiteConfig.dealerName;
 }
@@ -1323,28 +1326,41 @@ export default function HomeClient({
         }
       >
         <div className={styles.galaxyMasthead}>
-          <div>
-            <span>NẠP LITMATCH</span>
-            <strong>{dealerName}</strong>
-          </div>
-          <div className={styles.galaxySignals}>
-            {contactLinks.map((link) => (
-              <a
-                aria-label={link.label}
-                href={link.href}
-                key={link.label}
-                rel={link.target ? "noopener noreferrer" : undefined}
-                target={link.target}
-              >
+          <div className={styles.mastheadActions}>
+            <span className={styles.dealerBadge}>
+              <span className={styles.dealerAvatar}>
                 <Image
                   alt=""
-                  className={styles.contactIcon}
-                  height={26}
-                  src={link.iconSrc}
-                  width={26}
+                  className={styles.dealerAvatarImage}
+                  height={128}
+                  src={dealerAvatarUrl}
+                  width={128}
                 />
-              </a>
-            ))}
+              </span>
+              <span className={styles.dealerBadgeText}>
+                <strong>{dealerName}</strong>
+                <small>NẠP LITMATCH</small>
+              </span>
+            </span>
+            <div className={styles.galaxySignals}>
+              {contactLinks.map((link) => (
+                <a
+                  aria-label={link.label}
+                  href={link.href}
+                  key={link.label}
+                  rel={link.target ? "noopener noreferrer" : undefined}
+                  target={link.target}
+                >
+                  <Image
+                    alt=""
+                    className={styles.contactIcon}
+                    height={26}
+                    src={link.iconSrc}
+                    width={26}
+                  />
+                </a>
+              ))}
+            </div>
           </div>
         </div>
 
