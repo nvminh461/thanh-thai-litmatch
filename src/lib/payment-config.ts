@@ -29,10 +29,20 @@ export type LitmatchAgentRuntimeConfig = {
   zone: string;
 };
 
+export type SiteConfig = {
+  dealerName: string;
+  zaloPhone: string;
+  facebookUrl: string;
+  phoneNumber: string;
+  announcementEnabled: boolean;
+  announcementText: string;
+};
+
 export type RuntimeConfig = {
   bank: BankConfig;
   bankRate: RateConfig;
   cardRate: RateConfig;
+  site: SiteConfig;
   totp: TotpRuntimeConfig;
   litmatchAgent: LitmatchAgentRuntimeConfig;
   paymentCodePrefix: string;

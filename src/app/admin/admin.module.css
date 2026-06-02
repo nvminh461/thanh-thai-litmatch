@@ -89,7 +89,8 @@
 
 .loginForm input,
 .field input,
-.field select {
+.field select,
+.field textarea {
   width: 100%;
   min-width: 0;
   min-height: 42px;
@@ -101,9 +102,17 @@
   padding: 0 12px;
 }
 
+.field textarea {
+  min-height: 112px;
+  resize: vertical;
+  line-height: 1.45;
+  padding: 10px 12px;
+}
+
 .loginForm input:focus,
 .field input:focus,
-.field select:focus {
+.field select:focus,
+.field textarea:focus {
   border-color: #1f6feb;
   outline: 3px solid rgba(31, 111, 235, 0.12);
 }
@@ -367,6 +376,15 @@
   font-size: 13px;
   font-weight: 800;
   padding: 0 12px;
+}
+
+.field input[type="checkbox"] {
+  width: 20px;
+  min-height: 20px;
+  accent-color: #7c3aed;
+  justify-self: start;
+  cursor: pointer;
+  padding: 0;
 }
 
 .applyFilterButton {
@@ -1256,6 +1274,7 @@
 .loginForm input,
 .field input,
 .field select,
+.field textarea,
 .filterField input,
 .filterField select {
   border-color: rgba(216, 180, 254, 0.34);
@@ -1266,6 +1285,7 @@
 .loginForm input:focus,
 .field input:focus,
 .field select:focus,
+.field textarea:focus,
 .filterField input:focus,
 .filterField select:focus {
   border-color: #c084fc;

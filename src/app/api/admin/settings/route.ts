@@ -2,7 +2,10 @@ import { NextResponse } from "next/server";
 import { getAdminSession } from "@/server/admin-auth";
 import { toAdminRuntimeConfigForm } from "@/server/admin-view";
 import { getRuntimeConfig, saveRuntimeConfig } from "@/server/runtime-config";
-import { normalizePaymentCodePrefix, type RuntimeConfig } from "@/lib/payment-config";
+import {
+  normalizePaymentCodePrefix,
+  type RuntimeConfig,
+} from "@/lib/payment-config";
 
 function requiredString(value: unknown, fieldName: string) {
   const normalized = typeof value === "string" ? value.trim() : "";
@@ -22,6 +25,40 @@ function positiveNumber(value: unknown, fieldName: string) {
   }
 
   return numberValue;
+}
+
+function optionalString(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function contactNumber(value: unknown, fieldName: string) {
+  const normalized = optionalString(value).replace(/[\s.-]/g, "");
+
+  if (normalized && !/^\+?\d+$/.test(normalized)) {
+    throw new Error(`${fieldName} chỉ được nhập số.`);
+  }
+
+  return normalized;
+}
+
+function optionalHttpUrl(value: unknown, fieldName: string) {
+  const normalized = optionalString(value);
+
+  if (!normalized) {
+    return "";
+  }
+
+  try {
+    const parsedUrl = new URL(normalized);
+
+    if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
+      throw new Error();
+    }
+
+    return parsedUrl.toString();
+  } catch {
+    throw new Error(`${fieldName} phải là URL http/https hợp lệ.`);
+  }
 }
 
 export async function POST(request: Request) {
@@ -68,6 +105,14 @@ export async function POST(request: Request) {
         baseAmount: positiveNumber(body.cardBaseAmount, "Mốc tiền nạp thẻ"),
         diamond: positiveNumber(body.cardDiamond, "Tỷ lệ kim cương nạp thẻ"),
         star: positiveNumber(body.cardStar, "Tỷ lệ sao nạp thẻ"),
+      },
+      site: {
+        dealerName: requiredString(body.dealerName, "tên đại lý"),
+        zaloPhone: contactNumber(body.zaloPhone, "Số Zalo"),
+        facebookUrl: optionalHttpUrl(body.facebookUrl, "URL Facebook"),
+        phoneNumber: contactNumber(body.phoneNumber, "Số điện thoại"),
+        announcementEnabled: Boolean(body.announcementEnabled),
+        announcementText: optionalString(body.announcementText),
       },
       totp: currentConfig.totp,
       litmatchAgent: currentConfig.litmatchAgent,

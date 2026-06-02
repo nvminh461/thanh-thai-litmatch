@@ -12,6 +12,7 @@ import {
   type BankConfig,
   type RateConfig,
   type RewardType,
+  type SiteConfig,
 } from "@/lib/payment-config";
 import VerifyIdModal, {
   type VerifiedUserInfo,
@@ -183,31 +184,79 @@ function paymentStatusLabel(status: PaymentStatusValue) {
   return "Chưa thanh toán";
 }
 
+const defaultSiteConfig: SiteConfig = {
+  dealerName: "Đại lý Thành Thái",
+  zaloPhone: "",
+  facebookUrl: "",
+  phoneNumber: "",
+  announcementEnabled: false,
+  announcementText: "",
+};
+
+function getDealerName(siteConfig: SiteConfig) {
+  return siteConfig.dealerName.trim() || defaultSiteConfig.dealerName;
+}
+
+function getZaloUrl(siteConfig: SiteConfig) {
+  const zaloPhone = siteConfig.zaloPhone.replace(/\D/g, "");
+
+  return zaloPhone ? `https://zalo.me/${zaloPhone}` : "";
+}
+
+function getPhoneUrl(siteConfig: SiteConfig) {
+  const phoneNumber = siteConfig.phoneNumber.trim();
+
+  return phoneNumber ? `tel:${phoneNumber}` : "";
+}
+
+function getContactLinks(siteConfig: SiteConfig) {
+  return [
+    {
+      href: getZaloUrl(siteConfig),
+      icon: "Z",
+      label: "Zalo",
+      target: "_blank",
+    },
+    {
+      href: siteConfig.facebookUrl.trim(),
+      icon: "f",
+      label: "Facebook",
+      target: "_blank",
+    },
+    {
+      href: getPhoneUrl(siteConfig),
+      icon: "☎",
+      label: "Điện thoại",
+      target: undefined,
+    },
+  ].filter((link) => link.href);
+}
+
 const fallingItems = [
-  { className: styles.fallOne, icon: null },
-  { className: styles.fallTwo, icon: "💎" },
+  { className: styles.fallOne, icon: "✦" },
+  { className: styles.fallTwo, icon: "☄" },
   { className: styles.fallThree, icon: null },
-  { className: styles.fallFour, icon: "★" },
-  { className: styles.fallFive, icon: null },
-  { className: styles.fallSix, icon: "✦" },
+  { className: styles.fallFour, icon: "✧" },
+  { className: styles.fallFive, icon: "☾" },
+  { className: styles.fallSix, icon: "✺" },
   { className: styles.fallSeven, icon: null },
-  { className: styles.fallEight, icon: "♡" },
-  { className: styles.fallNine, icon: null },
-  { className: styles.fallTen, icon: "💬" },
+  { className: styles.fallEight, icon: "✦" },
+  { className: styles.fallNine, icon: "◆" },
+  { className: styles.fallTen, icon: "☄" },
   { className: styles.fallEleven, icon: null },
-  { className: styles.fallTwelve, icon: "💎" },
-  { className: styles.fallThirteen, icon: null },
-  { className: styles.fallFourteen, icon: "★" },
-  { className: styles.fallFifteen, icon: null },
+  { className: styles.fallTwelve, icon: "✧" },
+  { className: styles.fallThirteen, icon: "◌" },
+  { className: styles.fallFourteen, icon: "✺" },
+  { className: styles.fallFifteen, icon: "☾" },
   { className: styles.fallSixteen, icon: "✦" },
   { className: styles.fallSeventeen, icon: null },
-  { className: styles.fallEighteen, icon: "♡" },
-  { className: styles.fallNineteen, icon: null },
-  { className: styles.fallTwenty, icon: "💎" },
+  { className: styles.fallEighteen, icon: "◆" },
+  { className: styles.fallNineteen, icon: "✧" },
+  { className: styles.fallTwenty, icon: "☄" },
   { className: styles.fallTwentyOne, icon: null },
-  { className: styles.fallTwentyTwo, icon: "★" },
-  { className: styles.fallTwentyThree, icon: null },
-  { className: styles.fallTwentyFour, icon: "✦" },
+  { className: styles.fallTwentyTwo, icon: "✦" },
+  { className: styles.fallTwentyThree, icon: "☾" },
+  { className: styles.fallTwentyFour, icon: "✺" },
 ];
 
 
@@ -678,10 +727,12 @@ export default function HomeClient({
   bankConfig,
   bankRateConfig,
   cardRateConfig,
+  siteConfig,
 }: {
   bankConfig: BankConfig;
   bankRateConfig: RateConfig;
   cardRateConfig: RateConfig;
+  siteConfig: SiteConfig;
 }) {
   const [topUpMode, setTopUpMode] = useState<TopUpMode>("bank");
   const [currency, setCurrency] = useState<CurrencyType>("diamond");
@@ -722,8 +773,20 @@ export default function HomeClient({
   const [pendingUser, setPendingUser] = useState<VerifiedUserInfo | null>(null);
   const [verifyLoading, setVerifyLoading] = useState(false);
   const [verifyError, setVerifyError] = useState("");
-  const [showInternationalNotice, setShowInternationalNotice] = useState(true);
+  const [showAnnouncement, setShowAnnouncement] = useState(true);
   const tabBaseId = useId();
+  const mergedSiteConfig = {
+    ...defaultSiteConfig,
+    ...siteConfig,
+  };
+  const dealerName = getDealerName(mergedSiteConfig);
+  const contactLinks = getContactLinks(mergedSiteConfig);
+  const zaloUrl = getZaloUrl(mergedSiteConfig);
+  const announcementText = mergedSiteConfig.announcementText.trim();
+  const shouldShowAnnouncement =
+    showAnnouncement &&
+    mergedSiteConfig.announcementEnabled &&
+    Boolean(announcementText);
   const active = currencyConfig[currency];
   const receiveAmount = calculateReceiveAmount(
     paymentAmount,
@@ -1254,20 +1317,39 @@ export default function HomeClient({
               : active.sectionAria
         }
       >
-        {showInternationalNotice ? (
-          <div className={styles.internationalNotice} role="alert">
-            <div
-              className={styles.internationalNoticeLink}
-            >
-              <span className={styles.noticeBadge}>Nhận tiền nước ngoài</span>
-              <strong>Thanh toán tiền Nhật, Hàn, Mỹ, Đài, Trung, Úc?</strong>
-              <span>Liên hệ Đại lý Thành Thái để được hỗ trợ</span>
+        <div className={styles.galaxyMasthead}>
+          <div>
+            <span>{dealerName}</span>
+            <strong>Litmatch Galaxy</strong>
+          </div>
+          <div className={styles.galaxySignals}>
+            {contactLinks.map((link) => (
+              <a
+                aria-label={link.label}
+                href={link.href}
+                key={link.label}
+                rel={link.target ? "noopener noreferrer" : undefined}
+                target={link.target}
+              >
+                {link.icon}
+              </a>
+            ))}
+          </div>
+        </div>
+
+        {shouldShowAnnouncement ? (
+          <div className={styles.internationalNotice} role="status">
+            <div className={styles.internationalNoticeLink}>
+              <span className={styles.noticeBadge}>Thông báo</span>
+              <strong className={styles.announcementText}>
+                {announcementText}
+              </strong>
             </div>
             <button
               className={styles.noticeCloseButton}
               type="button"
               aria-label="Đóng thông báo"
-              onClick={() => setShowInternationalNotice(false)}
+              onClick={() => setShowAnnouncement(false)}
             >
               ×
             </button>
@@ -1289,12 +1371,12 @@ export default function HomeClient({
                 <span className={styles.scanPill}>QR sẵn sàng</span>
                 <div className={styles.qrFrame}>
                   <span className={`${styles.qrSticker} ${styles.qrJellyLeft}`}>
-                    🪼
+                    ☾
                   </span>
                   <span
                     className={`${styles.qrSticker} ${styles.qrJellyRight}`}
                   >
-                    🪼
+                    ✦
                   </span>
                   <span
                     className={`${styles.qrSticker} ${styles.qrStarTopLeft}`}
@@ -1320,12 +1402,12 @@ export default function HomeClient({
                     ★
                   </span>
                   <span className={`${styles.qrSticker} ${styles.qrFishLeft}`}>
-                    🐟
+                    ☄
                   </span>
                   <span
                     className={`${styles.qrSticker} ${styles.qrFishBottom}`}
                   >
-                    🐠
+                    ✧
                   </span>
                   <span
                     className={`${styles.qrBubble} ${styles.qrBubbleOne}`}
@@ -1456,17 +1538,17 @@ export default function HomeClient({
             </button>
 
             <span className={`${styles.cardSeaDecor} ${styles.cardDolphinTop}`}>
-              🐬
+              ☄
             </span>
             <span
               className={`${styles.cardSeaDecor} ${styles.cardDolphinLeft}`}
             >
-              🐬
+              ✦
             </span>
             <span
               className={`${styles.cardSeaDecor} ${styles.cardDolphinRight}`}
             >
-              🐬
+              ☾
             </span>
 
             <div className={styles.cardLayout}>
@@ -1909,12 +1991,28 @@ export default function HomeClient({
                       QR trọn đời
                     </button>
 
-                    <span className={`${styles.pillLink} ${styles.pillStatic}`}>
-                      <span className={styles.pillIcon} aria-hidden="true">
-                        💬
+                    {zaloUrl ? (
+                      <a
+                        className={styles.pillLink}
+                        href={zaloUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        <span className={styles.pillIcon} aria-hidden="true">
+                          Z
+                        </span>
+                        Liên hệ
+                      </a>
+                    ) : (
+                      <span
+                        className={`${styles.pillLink} ${styles.pillStatic}`}
+                      >
+                        <span className={styles.pillIcon} aria-hidden="true">
+                          Z
+                        </span>
+                        Liên hệ
                       </span>
-                      Liên hệ
-                    </span>
+                    )}
                   </nav>
                 </form>
               </div>
@@ -1922,7 +2020,7 @@ export default function HomeClient({
           </div>
         )}
 
-        <p className={styles.footer}>© 2026 Đại lý Thành Thái</p>
+        <p className={styles.footer}>© 2026 {dealerName}</p>
       </section>
 
       {showLifetimeQrModal ? (

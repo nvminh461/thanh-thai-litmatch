@@ -23,6 +23,12 @@ export type AdminRuntimeConfigForm = {
   cardDiamond: number;
   cardStar: number;
   paymentCodePrefix: string;
+  dealerName: string;
+  zaloPhone: string;
+  facebookUrl: string;
+  phoneNumber: string;
+  announcementEnabled: boolean;
+  announcementText: string;
 };
 
 export type AdminBankPaymentRow = {

@@ -2,6 +2,7 @@ import type {
   BankConfig,
   RateConfig,
   RuntimeConfig,
+  SiteConfig,
 } from "@/lib/payment-config";
 import {
   defaultBankRate,
@@ -12,12 +13,21 @@ import { getCollection } from "./mongo";
 
 const RUNTIME_CONFIG_KEY = "runtimeConfig";
 const DEFAULT_PAYMENT_CODE_PREFIX = "LM";
+const DEFAULT_DEALER_NAME = "Đại lý Thành Thái";
 const DEFAULT_BANK_CONFIG: BankConfig = {
   bankId: "",
   bankName: "",
   accountNo: "",
   accountName: "",
   template: "qr_only",
+};
+const DEFAULT_SITE_CONFIG: SiteConfig = {
+  dealerName: DEFAULT_DEALER_NAME,
+  zaloPhone: "",
+  facebookUrl: "",
+  phoneNumber: "",
+  announcementEnabled: false,
+  announcementText: "",
 };
 
 type AppSettingDocument<TValue> = {
@@ -29,7 +39,7 @@ type AppSettingDocument<TValue> = {
 
 type PersistedRuntimeConfig = Pick<
   RuntimeConfig,
-  "bank" | "bankRate" | "cardRate" | "paymentCodePrefix"
+  "bank" | "bankRate" | "cardRate" | "site" | "paymentCodePrefix"
 >;
 
 function nonEmptyString(value: unknown, fallback: string) {
@@ -40,6 +50,14 @@ function positiveNumber(value: unknown, fallback: number) {
   return typeof value === "number" && Number.isFinite(value) && value > 0
     ? value
     : fallback;
+}
+
+function optionalString(value: unknown, fallback = "") {
+  return typeof value === "string" ? value.trim() : fallback;
+}
+
+function booleanValue(value: unknown, fallback: boolean) {
+  return typeof value === "boolean" ? value : fallback;
 }
 
 function getEnvOnlyConfig() {
@@ -67,6 +85,7 @@ export function getDefaultRuntimeConfig(): RuntimeConfig {
     bank: DEFAULT_BANK_CONFIG,
     bankRate: defaultBankRate,
     cardRate: defaultCardRate,
+    site: DEFAULT_SITE_CONFIG,
     ...envOnlyConfig,
     paymentCodePrefix:
       normalizePaymentCodePrefix(process.env.PAYMENT_CODE_PREFIX ?? "") ||
@@ -82,6 +101,7 @@ export function normalizeRuntimeConfig(
   const bank = value?.bank ?? ({} as Partial<BankConfig>);
   const bankRate = value?.bankRate ?? ({} as Partial<RateConfig>);
   const cardRate = value?.cardRate ?? ({} as Partial<RateConfig>);
+  const site = value?.site ?? ({} as Partial<SiteConfig>);
   const prefix =
     normalizePaymentCodePrefix(value?.paymentCodePrefix ?? "") ||
     fallback.paymentCodePrefix ||
@@ -111,6 +131,20 @@ export function normalizeRuntimeConfig(
       diamond: positiveNumber(cardRate.diamond, fallback.cardRate.diamond),
       star: positiveNumber(cardRate.star, fallback.cardRate.star),
     },
+    site: {
+      dealerName: nonEmptyString(site.dealerName, fallback.site.dealerName),
+      zaloPhone: optionalString(site.zaloPhone, fallback.site.zaloPhone),
+      facebookUrl: optionalString(site.facebookUrl, fallback.site.facebookUrl),
+      phoneNumber: optionalString(site.phoneNumber, fallback.site.phoneNumber),
+      announcementEnabled: booleanValue(
+        site.announcementEnabled,
+        fallback.site.announcementEnabled,
+      ),
+      announcementText: optionalString(
+        site.announcementText,
+        fallback.site.announcementText,
+      ),
+    },
     totp: envOnlyConfig.totp,
     litmatchAgent: {
       ...envOnlyConfig.litmatchAgent,
@@ -125,6 +159,7 @@ function toPersistedRuntimeConfig(config: RuntimeConfig): PersistedRuntimeConfig
     bank: config.bank,
     bankRate: config.bankRate,
     cardRate: config.cardRate,
+    site: config.site,
     paymentCodePrefix: config.paymentCodePrefix,
   };
 }
@@ -144,6 +179,7 @@ export async function getRuntimeConfig(): Promise<RuntimeConfig> {
     if (
       !rawConfig.bankRate ||
       !rawConfig.cardRate ||
+      !rawConfig.site ||
       rawConfig.totp ||
       rawConfig.litmatchAgent
     ) {

@@ -2980,3 +2980,558 @@
 .statusMessage {
   color: #86efac;
 }
+
+/* Distinct customer-facing galaxy layout */
+.page::before {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  content: "";
+  background:
+    linear-gradient(115deg, transparent 0 24%, rgba(255, 255, 255, 0.08) 24.2% 24.4%, transparent 24.7% 100%),
+    linear-gradient(22deg, transparent 0 63%, rgba(216, 180, 254, 0.1) 63.1% 63.4%, transparent 63.7% 100%),
+    radial-gradient(circle at 18% 24%, rgba(250, 204, 21, 0.16) 0 1px, transparent 2px),
+    radial-gradient(circle at 74% 18%, rgba(255, 255, 255, 0.28) 0 1px, transparent 2px),
+    radial-gradient(circle at 86% 72%, rgba(103, 232, 249, 0.22) 0 1px, transparent 2px);
+  background-size:
+    100% 100%,
+    100% 100%,
+    180px 180px,
+    220px 220px,
+    260px 260px;
+}
+
+.shell {
+  z-index: 0;
+  opacity: 0.58;
+}
+
+.appFrame {
+  gap: 12px;
+  width: min(100%, 1160px);
+}
+
+.galaxyMasthead {
+  position: relative;
+  z-index: 2;
+  min-height: 58px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 2px;
+  padding: 0 4px;
+  color: #fff9ff;
+}
+
+.galaxyMasthead > div:first-child {
+  display: grid;
+  gap: 2px;
+}
+
+.galaxyMasthead span {
+  color: #d8c7ff;
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.galaxyMasthead strong {
+  color: #ffffff;
+  font-size: clamp(26px, 6vw, 46px);
+  font-weight: 950;
+  line-height: 0.95;
+  text-shadow:
+    0 0 22px rgba(192, 132, 252, 0.55),
+    0 6px 26px rgba(4, 3, 14, 0.7);
+}
+
+.galaxySignals {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.galaxySignals a,
+.galaxySignals span {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(216, 180, 254, 0.28);
+  border-radius: 999px;
+  background: rgba(12, 8, 30, 0.6);
+  box-shadow:
+    inset 0 1px 8px rgba(255, 255, 255, 0.1),
+    0 0 18px rgba(192, 132, 252, 0.24);
+  color: #ffe177;
+  font-size: 17px;
+  font-weight: 950;
+  text-decoration: none;
+}
+
+.galaxySignals a:hover,
+.galaxySignals a:focus-visible {
+  border-color: rgba(250, 204, 21, 0.62);
+  color: #ffffff;
+  outline: none;
+  transform: translateY(-2px);
+}
+
+.arcadeBoard {
+  border-radius: 18px;
+  background:
+    linear-gradient(135deg, rgba(16, 8, 34, 0.94), rgba(39, 17, 72, 0.82) 54%, rgba(9, 7, 24, 0.94)),
+    radial-gradient(circle at 86% 18%, rgba(250, 204, 21, 0.2), transparent 28%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    0 24px 70px rgba(3, 2, 12, 0.58),
+    0 0 0 1px rgba(216, 180, 254, 0.18);
+  padding: clamp(14px, 3vw, 28px);
+}
+
+.arcadeBoard::before {
+  inset: 0;
+  border: 0;
+  border-radius: inherit;
+  background:
+    linear-gradient(90deg, rgba(103, 232, 249, 0.28), transparent 22% 78%, rgba(250, 204, 21, 0.22)) 0 0 / 100% 1px no-repeat,
+    linear-gradient(180deg, rgba(216, 180, 254, 0.18), transparent 44%) 0 0 / 1px 100% no-repeat;
+}
+
+.bankLayout,
+.cardLayout,
+.qrLayout {
+  gap: clamp(14px, 2.6vw, 28px);
+}
+
+.currencyTabs {
+  height: auto;
+  align-items: stretch;
+  justify-content: stretch;
+  gap: 6px;
+  margin: 0 0 12px;
+  padding: 5px;
+  border: 1px solid rgba(216, 180, 254, 0.24);
+  border-radius: 14px;
+  background: rgba(8, 6, 24, 0.62);
+  box-shadow: inset 0 1px 12px rgba(255, 255, 255, 0.07);
+}
+
+.currencyTab,
+.currencyTabActive {
+  flex: 1 1 0;
+  width: auto;
+  height: 58px;
+  min-width: 0;
+  margin: 0;
+  border: 1px solid rgba(216, 180, 254, 0.18);
+  border-radius: 11px;
+  animation: none;
+}
+
+.currencyTab {
+  background: rgba(255, 255, 255, 0.07);
+  color: #d8c7ff;
+}
+
+.currencyTabActive {
+  background:
+    linear-gradient(135deg, rgba(250, 204, 21, 0.2), rgba(192, 132, 252, 0.46)),
+    rgba(255, 255, 255, 0.09);
+  color: #ffffff;
+}
+
+.currencyTabIcon {
+  width: 26px;
+  height: 26px;
+  font-size: 23px;
+}
+
+.rewardStage {
+  min-height: 392px;
+  align-content: start;
+  justify-items: start;
+  gap: 18px;
+  overflow: hidden;
+  border-radius: 16px 16px 10px 34px;
+  padding: clamp(22px, 4vw, 34px);
+  background:
+    radial-gradient(circle at 82% 18%, rgba(103, 232, 249, 0.18), transparent 28%),
+    radial-gradient(circle at 15% 82%, rgba(250, 204, 21, 0.14), transparent 30%),
+    linear-gradient(145deg, rgba(13, 8, 35, 0.94), rgba(54, 22, 96, 0.78));
+}
+
+.rewardStage::before {
+  right: -18%;
+  bottom: -20%;
+  width: 92%;
+  max-width: 430px;
+  border-style: dashed;
+  opacity: 0.72;
+}
+
+.rewardStage::after {
+  position: absolute;
+  top: 26px;
+  right: 24px;
+  width: min(34vw, 170px);
+  height: 2px;
+  border-radius: 999px;
+  content: "";
+  background: linear-gradient(90deg, transparent, rgba(250, 204, 21, 0.9), transparent);
+  box-shadow:
+    0 0 18px rgba(250, 204, 21, 0.42),
+    0 18px 0 rgba(216, 180, 254, 0.16);
+}
+
+.stageTitle,
+.boardTitle {
+  max-width: 12ch;
+  color: #ffffff;
+  text-align: left;
+  text-shadow:
+    0 0 22px rgba(192, 132, 252, 0.54),
+    0 8px 28px rgba(0, 0, 0, 0.58);
+}
+
+.rewardToken {
+  justify-self: center;
+  width: clamp(132px, 34vw, 178px);
+  border-radius: 26px;
+  background:
+    radial-gradient(circle at 44% 34%, rgba(255, 255, 255, 0.62), rgba(192, 132, 252, 0.46) 36%, rgba(11, 8, 31, 0.9) 72%),
+    conic-gradient(from 28deg, rgba(250, 204, 21, 0.34), rgba(103, 232, 249, 0.2), rgba(192, 132, 252, 0.4), rgba(250, 204, 21, 0.34));
+}
+
+.rewardAmount {
+  justify-items: start;
+  text-align: left;
+}
+
+.rewardAmount strong {
+  color: #ffffff;
+}
+
+.stageMeter {
+  border-color: rgba(250, 204, 21, 0.28);
+  background: rgba(250, 204, 21, 0.1);
+  color: #fff2b8;
+}
+
+.guidedDock,
+.receiptPanel {
+  border-left: 4px solid rgba(192, 132, 252, 0.72);
+  border-radius: 12px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.035)),
+    rgba(9, 7, 27, 0.74);
+}
+
+.guidedDock::before,
+.receiptPanel::before {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 52px;
+  height: 52px;
+  border-top: 1px solid rgba(250, 204, 21, 0.45);
+  border-right: 1px solid rgba(250, 204, 21, 0.45);
+  content: "";
+  pointer-events: none;
+}
+
+.sectionIntro {
+  align-items: start;
+}
+
+.dockStep,
+.scanPill {
+  border-radius: 8px;
+  background: rgba(250, 204, 21, 0.14);
+  color: #fff2b8;
+}
+
+.packageGrid {
+  gap: 9px;
+}
+
+.packageButton {
+  justify-items: start;
+  min-height: 74px;
+  border-radius: 10px;
+  padding: 13px 14px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.035)),
+    rgba(24, 13, 50, 0.86);
+}
+
+.packageButton::before {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 42%;
+  height: 3px;
+  border-radius: 999px;
+  content: "";
+  background: linear-gradient(90deg, #facc15, #c084fc);
+}
+
+.packageButtonSelected {
+  border-color: rgba(250, 204, 21, 0.64);
+  background:
+    linear-gradient(135deg, rgba(250, 204, 21, 0.2), rgba(192, 132, 252, 0.22)),
+    rgba(27, 14, 56, 0.9);
+}
+
+.packageButton strong {
+  color: #ffffff;
+  text-shadow: 0 0 12px rgba(192, 132, 252, 0.5);
+}
+
+.packageButton small,
+.paymentInfoText > span,
+.field input[readonly],
+.cardTopupSummary span,
+.cardTopupSummary small {
+  color: #e4d7ff;
+}
+
+.field input,
+.cardTopupField select,
+.cardTopupField input {
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.18), rgba(9, 7, 27, 0.72));
+  color: #ffffff;
+}
+
+.verifyModal,
+.lifetimeModal {
+  background:
+    radial-gradient(circle at 20% 0%, rgba(250, 204, 21, 0.14), transparent 34%),
+    linear-gradient(145deg, rgba(14, 8, 34, 0.98), rgba(42, 18, 82, 0.96));
+  color: #fff9ff;
+}
+
+.verifyModalTitle,
+.verifyModalId strong,
+.lifetimeModalTitle,
+.lifetimeVerifyRow strong,
+.lifetimeQrSummary strong,
+.paymentInfoText strong {
+  color: #ffffff;
+}
+
+.verifyModalEyebrow,
+.verifyModalHint,
+.verifyModalId span,
+.lifetimeNotice,
+.lifetimeRateNote,
+.lifetimeGuide span,
+.lifetimeQrSummary span,
+.lifetimeQrSummary small,
+.paymentInfoText > span {
+  color: #efe7ff;
+}
+
+.verifyModalBioCard,
+.lifetimeGuide,
+.lifetimeVerifyRow,
+.lifetimeQrSummary,
+.cardTopupSummary,
+.paymentInfoCard {
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.1), rgba(10, 7, 26, 0.82));
+  border-color: rgba(216, 180, 254, 0.34);
+}
+
+.verifyModalBio {
+  color: #ffffff;
+  font-weight: 750;
+}
+
+.lifetimeGuide strong,
+.cardTopupSummary strong {
+  color: #fff2b8;
+}
+
+.cardRewardButton {
+  color: #f8f0ff;
+}
+
+.cardRewardButtonActive {
+  color: #ffffff;
+}
+
+.announcementText {
+  white-space: pre-line;
+}
+
+.submitButton,
+.cardSubmitButton {
+  min-height: 58px;
+  border-radius: 12px;
+  background:
+    linear-gradient(135deg, #facc15, #c084fc 42%, #7c3aed);
+  color: #12091f;
+  text-shadow: none;
+}
+
+.pillLink,
+.statusButton,
+.backButton,
+.copyButton,
+.downloadButton,
+.cardBackButton {
+  border-radius: 10px;
+}
+
+.pillLink:hover,
+.pillLink:focus-visible,
+.statusButton:hover:not(:disabled),
+.statusButton:focus-visible:not(:disabled),
+.backButton:hover,
+.backButton:focus-visible,
+.copyButton:hover,
+.copyButton:focus-visible {
+  color: #ffffff;
+  box-shadow:
+    inset 0 1px 10px rgba(255, 255, 255, 0.16),
+    0 14px 26px rgba(126, 34, 206, 0.34);
+}
+
+.cardSeaDecor,
+.qrSticker {
+  border-color: rgba(250, 204, 21, 0.36);
+  border-radius: 999px;
+  background:
+    radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.52), transparent 34%),
+    rgba(30, 16, 62, 0.92);
+  color: #fff2b8;
+  box-shadow:
+    inset 0 1px 9px rgba(255, 255, 255, 0.14),
+    0 0 18px rgba(250, 204, 21, 0.18),
+    0 10px 22px rgba(4, 3, 14, 0.38);
+}
+
+.cardSeaDecor {
+  font-size: 30px;
+}
+
+.qrJellyLeft,
+.qrJellyRight,
+.qrFishLeft,
+.qrFishBottom {
+  width: 42px;
+  height: 42px;
+  border-radius: 999px;
+  font-size: 25px;
+}
+
+.qrFishLeft,
+.qrFishBottom {
+  color: #d8b4fe;
+}
+
+.qrBubble {
+  border: 0;
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow:
+    0 0 10px rgba(255, 255, 255, 0.56),
+    0 0 22px rgba(192, 132, 252, 0.42);
+}
+
+.fallingIcon {
+  color: #fff2b8;
+  text-shadow:
+    0 0 14px rgba(250, 204, 21, 0.62),
+    0 0 28px rgba(192, 132, 252, 0.42);
+}
+
+.fallingBubble {
+  position: absolute;
+  border: 1px solid rgba(216, 180, 254, 0.36);
+  background:
+    radial-gradient(circle at 34% 28%, rgba(255, 255, 255, 0.88) 0 10%, transparent 11%),
+    radial-gradient(circle at 54% 55%, rgba(192, 132, 252, 0.74), rgba(22, 11, 48, 0.72) 68%);
+  box-shadow:
+    inset -5px -6px 13px rgba(4, 3, 14, 0.32),
+    0 0 22px rgba(192, 132, 252, 0.34);
+}
+
+.fallingBubble::before {
+  position: absolute;
+  top: 47%;
+  left: -28%;
+  width: 154%;
+  height: 36%;
+  border-top: 1px solid rgba(250, 204, 21, 0.46);
+  border-radius: 999px;
+  content: "";
+  transform: rotate(-18deg);
+}
+
+.wave {
+  width: 108px;
+  height: 58px;
+  border: 1px solid rgba(216, 180, 254, 0.26);
+  border-bottom-color: transparent;
+  border-radius: 999px 999px 0 0;
+  background: none;
+  opacity: 0.32;
+}
+
+@media (min-width: 720px) {
+  .bankLayout,
+  .cardLayout {
+    grid-template-columns: minmax(270px, 0.78fr) minmax(420px, 1.22fr);
+  }
+
+  .qrLayout {
+    grid-template-columns: minmax(300px, 0.86fr) minmax(420px, 1.14fr);
+  }
+
+  .rewardStage {
+    min-height: 500px;
+  }
+
+  .actionDock {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 980px) {
+  .rewardStage {
+    min-height: 540px;
+  }
+}
+
+@media (max-width: 520px) {
+  .galaxyMasthead {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .galaxySignals a,
+  .galaxySignals span {
+    width: 31px;
+    height: 31px;
+  }
+
+  .stageTitle,
+  .boardTitle,
+  .rewardAmount {
+    text-align: center;
+  }
+
+  .rewardStage,
+  .rewardAmount {
+    justify-items: center;
+  }
+
+  .actionDock {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

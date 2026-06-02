@@ -17,5 +17,11 @@ export function toAdminRuntimeConfigForm(
     cardDiamond: config.cardRate.diamond,
     cardStar: config.cardRate.star,
     paymentCodePrefix: config.paymentCodePrefix,
+    dealerName: config.site.dealerName,
+    zaloPhone: config.site.zaloPhone,
+    facebookUrl: config.site.facebookUrl,
+    phoneNumber: config.site.phoneNumber,
+    announcementEnabled: config.site.announcementEnabled,
+    announcementText: config.site.announcementText,
   };
 }

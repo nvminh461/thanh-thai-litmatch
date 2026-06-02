@@ -341,6 +341,57 @@ function Field({
   );
 }
 
+function CheckboxField({
+  label,
+  name,
+  checked,
+  onChange,
+}: {
+  label: string;
+  name: keyof ConfigFormState;
+  checked: boolean;
+  onChange: (name: keyof ConfigFormState, value: boolean) => void;
+}) {
+  return (
+    <label className={styles.field}>
+      <span>{label}</span>
+      <input
+        name={name}
+        type="checkbox"
+        checked={checked}
+        onChange={(event) => onChange(name, event.target.checked)}
+      />
+    </label>
+  );
+}
+
+function TextareaField({
+  label,
+  name,
+  value,
+  placeholder,
+  onChange,
+}: {
+  label: string;
+  name: keyof ConfigFormState;
+  value: string;
+  placeholder?: string;
+  onChange: (name: keyof ConfigFormState, value: string) => void;
+}) {
+  return (
+    <label className={`${styles.field} ${styles.fullWidthField}`}>
+      <span>{label}</span>
+      <textarea
+        name={name}
+        value={value}
+        placeholder={placeholder}
+        rows={4}
+        onChange={(event) => onChange(name, event.target.value)}
+      />
+    </label>
+  );
+}
+
 function DateFilterField({
   label,
   value,
@@ -787,7 +838,7 @@ export default function AdminDashboard({
     fetchLifetimeQrReport,
   ]);
 
-  function updateField(name: keyof ConfigFormState, value: string) {
+  function updateField(name: keyof ConfigFormState, value: string | boolean) {
     setForm((current) => ({ ...current, [name]: value }));
     setSaveMessage("");
     setSaveError("");
@@ -1434,13 +1485,65 @@ export default function AdminDashboard({
                 <h2 id="settings-title">Cấu hình hệ thống</h2>
                 <p>
                   VietQR và tỉ giá lưu trong DB. TOTP, Litmatch agent,
-                  DATABASE_URL, SEPAY_WEBHOOK_API_KEY, PAY1S_* và
+                DATABASE_URL, SEPAY_WEBHOOK_API_KEY, PAY1S_* và
                   ADMIN_SESSION_SECRET giữ trong env.
                 </p>
               </div>
             </div>
 
             <form className={styles.settingsForm} onSubmit={handleSaveConfig}>
+              <div className={styles.formSection}>
+                <h3>Website & liên hệ</h3>
+                <div className={styles.formGrid}>
+                  <Field
+                    label="Tên đại lý"
+                    name="dealerName"
+                    value={form.dealerName}
+                    onChange={updateField}
+                  />
+                  <Field
+                    label="Số Zalo"
+                    name="zaloPhone"
+                    value={form.zaloPhone}
+                    placeholder="Ví dụ: 0367430001"
+                    onChange={updateField}
+                  />
+                  <Field
+                    label="URL Facebook"
+                    name="facebookUrl"
+                    value={form.facebookUrl}
+                    placeholder="https://facebook.com/..."
+                    onChange={updateField}
+                  />
+                  <Field
+                    label="Số điện thoại"
+                    name="phoneNumber"
+                    value={form.phoneNumber}
+                    placeholder="Ví dụ: 0367430001"
+                    onChange={updateField}
+                  />
+                </div>
+              </div>
+
+              <div className={styles.formSection}>
+                <h3>Thông báo website</h3>
+                <div className={styles.formGrid}>
+                  <CheckboxField
+                    label="Bật thông báo đầu trang"
+                    name="announcementEnabled"
+                    checked={form.announcementEnabled}
+                    onChange={updateField}
+                  />
+                  <TextareaField
+                    label="Nội dung thông báo"
+                    name="announcementText"
+                    value={form.announcementText}
+                    placeholder={"Nhập thông báo hiển thị trên website\nEnter để xuống dòng"}
+                    onChange={updateField}
+                  />
+                </div>
+              </div>
+
               <div className={styles.formSection}>
                 <h3>VietQR</h3>
                 <div className={styles.formGrid}>
