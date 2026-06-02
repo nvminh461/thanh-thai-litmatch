@@ -1785,7 +1785,6 @@ export default function HomeClient({
               >
                 <div className={styles.packageHeader}>
                   <div className={styles.sectionIntro}>
-                    <span className={styles.dockStep}>01</span>
                     <div>
                       <h2>Chọn gói nạp</h2>
                       <p>Gói nạp nhanh và số tiền tùy chỉnh.</p>
