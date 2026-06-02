@@ -67,6 +67,59 @@ Tỉ giá không lấy từ env. Khi DB chưa có cấu hình mới, hệ thốn
 
 VietQR cũng không lấy từ env. Cấu hình ngân hàng, số tài khoản, chủ tài khoản và template QR được lưu trong MongoDB qua admin.
 
+## Lấy `TOTP_SECRET` Từ QR 2FA Mới
+
+`TOTP_SECRET` là secret trong QR 2FA của tài khoản Litmatch agent. Mỗi khi đổi tài khoản agent hoặc tạo lại 2FA, cần lấy secret mới và cập nhật env.
+
+Chuẩn bị:
+
+1. Lấy ảnh QR 2FA mới từ màn hình thiết lập tài khoản agent. Ảnh nên rõ, không bị che, không bị nén quá mạnh.
+2. Tạo thư mục chứa QR local:
+
+```powershell
+New-Item -ItemType Directory -Force src/server/secrets
+```
+
+3. Copy ảnh QR vào đúng đường dẫn mặc định:
+
+```powershell
+Copy-Item "D:\path\to\new-2fa-qr.png" "src/server/secrets/2fa-qr.png"
+```
+
+4. Chạy script đọc secret:
+
+```bash
+npm run read-2fa-secret
+```
+
+Kết quả sẽ có dạng:
+
+```text
+Secret: BASE32_SECRET_HERE
+Issuer: Litmatch
+Label: 843xxxxxxxx
+Type: totp
+Algorithm: SHA1
+Digits: 6
+Period: 30
+```
+
+Cập nhật env:
+
+```env
+TOTP_SECRET=BASE32_SECRET_HERE
+TOTP_ISSUER=Litmatch
+TOTP_LABEL=843xxxxxxxx
+```
+
+Sau khi cập nhật trên Vercel hoặc server production, redeploy/restart app để env mới có hiệu lực.
+
+Lưu ý bảo mật:
+
+- Không commit ảnh QR, `.env`, hoặc secret thật lên git.
+- Nếu QR đã bị lộ, hãy tạo lại 2FA trên tài khoản agent và cập nhật `TOTP_SECRET` mới.
+- Nếu script báo `Could not read QR code`, hãy crop QR rõ hơn, lưu lại dạng PNG/JPG rồi chạy lại.
+
 Chạy dev:
 
 ```bash
@@ -120,22 +173,72 @@ Các trạng thái giao dịch:
 
 ### SePay
 
+SePay dùng cho luồng chuyển khoản ngân hàng, bao gồm QR thường và QR trọn đời.
+
 Webhook URL:
 
 ```text
 https://your-domain.com/api/webhooks/sepay
 ```
 
-Cấu hình trên SePay:
+Cấu hình env:
+
+```env
+SEPAY_WEBHOOK_API_KEY=your_random_webhook_secret
+```
+
+Với local `.env`, nếu secret có ký tự đặc biệt như `#`, `&`, `=`, nên bọc trong dấu quote:
+
+```env
+SEPAY_WEBHOOK_API_KEY="your#special&secret=value"
+```
+
+Trên Vercel, nhập raw value trong Environment Variables, không nhập kèm dấu quote.
+
+Cấu hình webhook trên SePay:
 
 - Method: `POST`
 - Content-Type: `application/json`
 - Header: `Authorization: Apikey <SEPAY_WEBHOOK_API_KEY>`
-- Prefix/mã thanh toán: dùng prefix giống `PAYMENT_CODE_PREFIX`, mặc định `LM`
+- URL: `https://your-domain.com/api/webhooks/sepay`
+- Chỉ gửi giao dịch tiền vào nếu SePay có tùy chọn lọc.
+
+Payload SePay cần có các trường chính:
+
+```json
+{
+  "id": 60561246,
+  "gateway": "MBBank",
+  "transactionDate": "2026-06-02 20:00:00",
+  "accountNumber": "123456789",
+  "code": "LMABC1234567",
+  "content": "LMABC1234567",
+  "transferType": "in",
+  "transferAmount": 100000,
+  "referenceCode": "FT123456789"
+}
+```
 
 Ứng dụng match theo `payload.code` trước. Nếu `code` trống, hệ thống tìm mã `LM...` trong `payload.content`.
 
+Với QR thường:
+
+- Nội dung chuyển khoản do hệ thống sinh theo prefix `paymentCodePrefix`, mặc định `LM`.
+- Số tiền webhook phải khớp đúng số tiền của giao dịch đã tạo.
+
 Với QR chuyển khoản trọn đời, webhook không cần khớp số tiền đã khai báo trước. Hệ thống dùng `payload.transferAmount` để tính số kim cương/sao theo tỉ giá chuyển khoản đang lưu trong MongoDB tại thời điểm nhận webhook.
+
+Nội dung QR trọn đời có dạng:
+
+```text
+LMKC THANHTHAI 123456789
+LMSAO THANHTHAI 123456789
+```
+
+- `LMKC`: nạp kim cương.
+- `LMSAO`: nạp sao.
+- `THANHTHAI`: mã CTV/đại lý, chỉ dùng chữ/số không dấu.
+- `123456789`: ID Litmatch.
 
 Phản hồi webhook:
 
@@ -157,17 +260,79 @@ Ví dụ lỗi:
 
 ### PAY1S/DOITHE1S
 
+PAY1S/DOITHE1S dùng cho luồng nạp thẻ cào.
+
 Callback URL:
 
 ```text
 https://your-domain.com/api/webhooks/pay1s
 ```
 
-PAY1S gửi JSON callback. Server xác minh:
+Cấu hình env:
+
+```env
+PAY1S_PARTNER_ID=your_partner_id
+PAY1S_PARTNER_KEY=your_partner_key
+PAY1S_BASE_URL=https://pay1s.com/chargingws/v2
+```
+
+Nếu tài khoản dùng DOITHE1S, base URL có thể là:
+
+```env
+PAY1S_BASE_URL=https://doithe1s.vn/chargingws/v2
+```
+
+Cấu hình trên PAY1S/DOITHE1S:
+
+- Callback URL: `https://your-domain.com/api/webhooks/pay1s`
+- Callback method: `POST`
+- Callback body: JSON
+- Không cần cấu hình header riêng; server xác thực bằng `callback_sign`.
+
+Khi người dùng gửi thẻ, server tự POST sang `PAY1S_BASE_URL` với form-urlencoded:
+
+```text
+request_id=<id giao dịch trong hệ thống>
+code=<mã thẻ>
+partner_id=<PAY1S_PARTNER_ID>
+serial=<serial thẻ>
+telco=VIETTEL|MOBIFONE|VINAPHONE
+amount=<mệnh giá khai báo>
+command=charging
+sign=md5(PAY1S_PARTNER_KEY + code + serial)
+```
+
+PAY1S gửi JSON callback về app. Server xác minh:
 
 ```text
 callback_sign == md5(PAY1S_PARTNER_KEY + code + serial)
 ```
+
+Callback mẫu:
+
+```json
+{
+  "status": 1,
+  "message": "Thẻ đúng",
+  "request_id": "123456789",
+  "trans_id": "P1S123456",
+  "declared_value": 100000,
+  "value": 100000,
+  "amount": 70000,
+  "code": "CARD_CODE",
+  "serial": "CARD_SERIAL",
+  "telco": "VIETTEL",
+  "callback_sign": "md5_hash_here"
+}
+```
+
+Ý nghĩa trạng thái chính:
+
+- `status = 1`: thẻ đúng, hệ thống tự nạp Litmatch.
+- `status = 2`: thẻ đúng nhưng sai mệnh giá, hệ thống không tự nạp và chuyển `recharge_failed` để kiểm tra thủ công.
+- `status = 3`: thẻ lỗi.
+- `status = 4`: provider bảo trì.
+- `status = 99`: thẻ chờ xử lý.
 
 Webhook hợp lệ luôn trả:
 
@@ -176,6 +341,14 @@ Webhook hợp lệ luôn trả:
 ```
 
 Sai chữ ký PAY1S trả `401`. SePay sai API key cũng trả `401`.
+
+Checklist test PAY1S:
+
+1. Cấu hình `PAY1S_PARTNER_ID`, `PAY1S_PARTNER_KEY`, `PAY1S_BASE_URL` trên Vercel/server.
+2. Redeploy/restart app sau khi đổi env.
+3. Tạo một giao dịch nạp thẻ trên web.
+4. Kiểm tra admin phần `Giao dịch nạp thẻ`: giao dịch phải có `requestId` và trạng thái `processing` hoặc trạng thái kết quả từ provider.
+5. Khi provider callback, kiểm tra `card_webhook_events` và trạng thái giao dịch trong admin.
 
 ## Ghi Chú Vận Hành
 
