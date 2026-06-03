@@ -92,6 +92,20 @@ export async function ensureMongoIndexes() {
               partialFilterExpression: { requestId: { $exists: true } },
             },
           ),
+        db.collection("diamond_sale_payments").createIndex({ updatedAt: -1 }),
+        db.collection("diamond_sale_payments").createIndex({ orderCode: 1 }, { unique: true }),
+        db
+          .collection("diamond_sale_payments")
+          .createIndex(
+            { "sepay.id": 1 },
+            {
+              unique: true,
+              partialFilterExpression: { "sepay.id": { $exists: true } },
+            },
+          ),
+        db
+          .collection("diamond_sale_webhook_events")
+          .createIndex({ eventKey: 1 }, { unique: true }),
         db
           .collection("sepay_webhook_events")
           .createIndex({ sepayId: 1 }, { unique: true }),

@@ -8,6 +8,10 @@ import type {
   AdminBankQrBlacklistRow,
   AdminBankQrBlacklistStatus,
   AdminCardPaymentRow,
+  AdminDiamondSalePaymentRow,
+  AdminDiamondSalePaymentSource,
+  AdminDiamondSalePaymentStatus,
+  AdminPaginatedDiamondSalePayments,
   AdminPaginatedCardPayments,
   AdminDirectRechargeRow,
   AdminLifetimeQrExportResult,
@@ -29,7 +33,14 @@ type AdminDashboardProps = {
   cardPayments: AdminPaginatedCardPayments;
   lifetimeQrReport: AdminLifetimeQrReport;
   directRecharges: AdminPaginatedDirectRecharges;
+  diamondSalePayments: AdminPaginatedDiamondSalePayments;
   bankQrBlacklist: AdminPaginatedPayments<AdminBankQrBlacklistRow>;
+};
+
+type ConfigDiamondSaleTierState = {
+  id: string;
+  minAmount: string;
+  diamond: string;
 };
 
 type ConfigFormState = Omit<
@@ -40,6 +51,8 @@ type ConfigFormState = Omit<
   | "cardBaseAmount"
   | "cardDiamond"
   | "cardStar"
+  | "diamondSaleBaseAmount"
+  | "diamondSaleTiers"
 > & {
   bankBaseAmount: string;
   bankDiamond: string;
@@ -47,6 +60,8 @@ type ConfigFormState = Omit<
   cardBaseAmount: string;
   cardDiamond: string;
   cardStar: string;
+  diamondSaleBaseAmount: string;
+  diamondSaleTiers: ConfigDiamondSaleTierState[];
 };
 
 type SaveSettingsResponse = {
@@ -58,6 +73,7 @@ type SaveSettingsResponse = {
 type AdminSection =
   | "bank"
   | "card"
+  | "diamondSale"
   | "direct"
   | "blacklist"
   | "report"
@@ -65,6 +81,8 @@ type AdminSection =
 type StatusFilter = "all" | AdminPaymentStatus;
 type DirectStatusFilter = "all" | AdminDirectRechargeRow["status"];
 type BlacklistStatusFilter = "all" | AdminBankQrBlacklistStatus;
+type DiamondSaleStatusFilter = "all" | AdminDiamondSalePaymentStatus;
+type DiamondSaleSourceFilter = "all" | AdminDiamondSalePaymentSource;
 type PaymentKind = "bank" | "card";
 type BankFilterState = {
   status: StatusFilter;
@@ -88,6 +106,14 @@ type DirectFilterState = {
   status: DirectStatusFilter;
   litmatchId: string;
   note: string;
+  updatedFrom: string;
+  updatedTo: string;
+};
+type DiamondSaleFilterState = {
+  status: DiamondSaleStatusFilter;
+  source: DiamondSaleSourceFilter;
+  litmatchId: string;
+  query: string;
   updatedFrom: string;
   updatedTo: string;
 };
@@ -154,6 +180,12 @@ type CardPaymentUpdateResponse = {
   error?: string;
 };
 
+type DiamondSalePaymentResponse = {
+  success: boolean;
+  data?: AdminDiamondSalePaymentRow;
+  error?: string;
+};
+
 type DirectRechargeFormState = {
   litmatchId: string;
   rewardType: RewardType;
@@ -178,6 +210,14 @@ type DirectNoteEditState = {
 type CardNoteEditState = {
   paymentId: string;
   note: string;
+  loading: boolean;
+  error: string;
+};
+
+type DiamondSaleRetryState = {
+  id: string;
+  litmatchId: string;
+  password: string;
   loading: boolean;
   error: string;
 };
@@ -302,9 +342,49 @@ function directRechargeStatusClass(status: AdminDirectRechargeRow["status"]) {
   return styles.statusProcessing;
 }
 
+function diamondSaleStatusLabel(status: AdminDiamondSalePaymentStatus) {
+  if (status === "completed") {
+    return "Thành công";
+  }
+
+  if (status === "failed") {
+    return "Lỗi";
+  }
+
+  if (status === "provider_pending") {
+    return "Chờ bên thứ ba";
+  }
+
+  return status === "paid" ? "Đã nhận tiền" : "Chưa thanh toán";
+}
+
+function diamondSaleStatusClass(status: AdminDiamondSalePaymentStatus) {
+  if (status === "completed") {
+    return styles.statusCompleted;
+  }
+
+  if (status === "failed") {
+    return styles.statusFailed;
+  }
+
+  if (status === "provider_pending") {
+    return styles.statusProcessing;
+  }
+
+  return status === "paid" ? styles.statusPaid : styles.statusIncomplete;
+}
+
+function diamondSaleSourceLabel(source: AdminDiamondSalePaymentSource) {
+  return source === "manual_transfer" ? "Tự chuyển khoản" : "Tạo QR";
+}
+
 function sectionTitle(section: AdminSection) {
   if (section === "card") {
     return "Giao dịch nạp thẻ";
+  }
+
+  if (section === "diamondSale") {
+    return "Kim cương xả";
   }
 
   if (section === "direct") {
@@ -335,6 +415,12 @@ function toFormState(config: AdminRuntimeConfigForm): ConfigFormState {
     cardBaseAmount: String(config.cardBaseAmount),
     cardDiamond: String(config.cardDiamond),
     cardStar: String(config.cardStar),
+    diamondSaleBaseAmount: String(config.diamondSaleBaseAmount),
+    diamondSaleTiers: config.diamondSaleTiers.map((tier, index) => ({
+      id: `${tier.minAmount}-${index}`,
+      minAmount: String(tier.minAmount),
+      diamond: String(tier.diamond),
+    })),
   };
 }
 
@@ -367,6 +453,17 @@ function getEmptyDirectFilters(): DirectFilterState {
     status: "all",
     litmatchId: "",
     note: "",
+    updatedFrom: "",
+    updatedTo: "",
+  };
+}
+
+function getEmptyDiamondSaleFilters(): DiamondSaleFilterState {
+  return {
+    status: "all",
+    source: "all",
+    litmatchId: "",
+    query: "",
     updatedFrom: "",
     updatedTo: "",
   };
@@ -510,6 +607,7 @@ export default function AdminDashboard({
   cardPayments,
   lifetimeQrReport,
   directRecharges,
+  diamondSalePayments,
   bankQrBlacklist,
 }: AdminDashboardProps) {
   const [form, setForm] = useState<ConfigFormState>(() =>
@@ -523,10 +621,15 @@ export default function AdminDashboard({
   const [cardPageData, setCardPageData] = useState(cardPayments);
   const [reportData, setReportData] = useState(lifetimeQrReport);
   const [directPageData, setDirectPageData] = useState(directRecharges);
+  const [diamondSalePageData, setDiamondSalePageData] =
+    useState(diamondSalePayments);
   const [blacklistPageData, setBlacklistPageData] = useState(bankQrBlacklist);
   const [bankPage, setBankPage] = useState(bankPayments.page);
   const [cardPage, setCardPage] = useState(cardPayments.page);
   const [directPage, setDirectPage] = useState(directRecharges.page);
+  const [diamondSalePage, setDiamondSalePage] = useState(
+    diamondSalePayments.page,
+  );
   const [blacklistPage, setBlacklistPage] = useState(bankQrBlacklist.page);
   const [bankFilters, setBankFilters] =
     useState<BankFilterState>(getEmptyBankFilters);
@@ -544,12 +647,17 @@ export default function AdminDashboard({
     useState<DirectFilterState>(getEmptyDirectFilters);
   const [appliedDirectFilters, setAppliedDirectFilters] =
     useState<DirectFilterState>(getEmptyDirectFilters);
+  const [diamondSaleFilters, setDiamondSaleFilters] =
+    useState<DiamondSaleFilterState>(getEmptyDiamondSaleFilters);
+  const [appliedDiamondSaleFilters, setAppliedDiamondSaleFilters] =
+    useState<DiamondSaleFilterState>(getEmptyDiamondSaleFilters);
   const [blacklistFilters, setBlacklistFilters] =
     useState<BlacklistFilterState>(getEmptyBlacklistFilters);
   const [appliedBlacklistFilters, setAppliedBlacklistFilters] =
     useState<BlacklistFilterState>(getEmptyBlacklistFilters);
   const [bankError, setBankError] = useState("");
   const [cardError, setCardError] = useState("");
+  const [diamondSaleError, setDiamondSaleError] = useState("");
   const [reportError, setReportError] = useState("");
   const [blacklistError, setBlacklistError] = useState("");
   const [blacklistMessage, setBlacklistMessage] = useState("");
@@ -582,6 +690,8 @@ export default function AdminDashboard({
     useState<CardNoteEditState | null>(null);
   const [directNoteEdit, setDirectNoteEdit] =
     useState<DirectNoteEditState | null>(null);
+  const [diamondSaleRetry, setDiamondSaleRetry] =
+    useState<DiamondSaleRetryState | null>(null);
   const hasBankFilters =
     appliedBankFilters.status !== "all" ||
     hasActiveFilters([
@@ -613,6 +723,15 @@ export default function AdminDashboard({
       appliedDirectFilters.note,
       appliedDirectFilters.updatedFrom,
       appliedDirectFilters.updatedTo,
+    ]);
+  const hasDiamondSaleFilters =
+    appliedDiamondSaleFilters.status !== "all" ||
+    appliedDiamondSaleFilters.source !== "all" ||
+    hasActiveFilters([
+      appliedDiamondSaleFilters.litmatchId,
+      appliedDiamondSaleFilters.query,
+      appliedDiamondSaleFilters.updatedFrom,
+      appliedDiamondSaleFilters.updatedTo,
     ]);
   const hasBlacklistFilters =
     appliedBlacklistFilters.status !== "all" ||
@@ -810,6 +929,60 @@ export default function AdminDashboard({
     setDirectPage(data.page);
   }
 
+  async function fetchDiamondSalePayments({
+    page,
+    status,
+    source,
+    litmatchId,
+    query,
+    updatedFrom,
+    updatedTo,
+    signal,
+  }: DiamondSaleFilterState & {
+    page: number;
+    signal?: AbortSignal;
+  }) {
+    const params = new URLSearchParams({
+      page: String(page),
+      status,
+      source,
+      litmatchId: litmatchId.replace(/\D/g, ""),
+      query: query.trim(),
+      updatedFrom,
+      updatedTo,
+    });
+    const response = await fetch(
+      `/api/admin/diamond-sale-payments?${params.toString()}`,
+      signal ? { signal } : undefined,
+    );
+    const payload =
+      (await response.json()) as PaymentsResponse<AdminPaginatedDiamondSalePayments>;
+
+    if (!response.ok || !payload.success || !payload.data) {
+      throw new Error(
+        payload.error ?? "Không tải được giao dịch kim cương xả.",
+      );
+    }
+
+    return payload.data;
+  }
+
+  async function reloadDiamondSalePayments(page = diamondSalePage) {
+    const data = await fetchDiamondSalePayments({
+      page,
+      status: appliedDiamondSaleFilters.status,
+      source: appliedDiamondSaleFilters.source,
+      litmatchId: appliedDiamondSaleFilters.litmatchId,
+      query: appliedDiamondSaleFilters.query,
+      updatedFrom: appliedDiamondSaleFilters.updatedFrom,
+      updatedTo: appliedDiamondSaleFilters.updatedTo,
+    });
+
+    setDiamondSaleError("");
+    setDiamondSalePageData(data);
+    setDiamondSalePage(data.page);
+  }
+
   const fetchBankQrBlacklist = useCallback(async (page: number, signal?: AbortSignal) => {
     const params = new URLSearchParams({
       page: String(page),
@@ -963,6 +1136,42 @@ export default function AdminDashboard({
   useEffect(() => {
     const controller = new AbortController();
 
+    fetchDiamondSalePayments({
+      page: diamondSalePage,
+      status: appliedDiamondSaleFilters.status,
+      source: appliedDiamondSaleFilters.source,
+      litmatchId: appliedDiamondSaleFilters.litmatchId,
+      query: appliedDiamondSaleFilters.query,
+      updatedFrom: appliedDiamondSaleFilters.updatedFrom,
+      updatedTo: appliedDiamondSaleFilters.updatedTo,
+      signal: controller.signal,
+    })
+      .then((data) => {
+        setDiamondSaleError("");
+        setDiamondSalePageData(data);
+        setDiamondSalePage(data.page);
+      })
+      .catch((error: unknown) => {
+        if (error instanceof DOMException && error.name === "AbortError") {
+          return;
+        }
+
+        setDiamondSaleError(
+          error instanceof Error
+            ? error.message
+            : "Không tải được giao dịch kim cương xả.",
+        );
+      });
+
+    return () => controller.abort();
+  }, [
+    appliedDiamondSaleFilters,
+    diamondSalePage,
+  ]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
     fetchBankQrBlacklist(blacklistPage, controller.signal)
       .then((data) => {
         setBlacklistError("");
@@ -1072,6 +1281,62 @@ export default function AdminDashboard({
     setDirectFilters(emptyFilters);
     setAppliedDirectFilters(emptyFilters);
     setDirectPage(1);
+  }
+
+  function applyDiamondSaleFilters() {
+    setAppliedDiamondSaleFilters(diamondSaleFilters);
+    setDiamondSalePage(1);
+  }
+
+  function clearDiamondSaleFilters() {
+    const emptyFilters = getEmptyDiamondSaleFilters();
+
+    setDiamondSaleFilters(emptyFilters);
+    setAppliedDiamondSaleFilters(emptyFilters);
+    setDiamondSalePage(1);
+  }
+
+  function addDiamondSaleTier() {
+    setForm((current) => ({
+      ...current,
+      diamondSaleTiers: [
+        ...current.diamondSaleTiers,
+        {
+          id: `new-${Date.now()}`,
+          minAmount: "",
+          diamond: "",
+        },
+      ],
+    }));
+    setSaveMessage("");
+    setSaveError("");
+  }
+
+  function updateDiamondSaleTier(
+    id: string,
+    field: "minAmount" | "diamond",
+    value: string,
+  ) {
+    setForm((current) => ({
+      ...current,
+      diamondSaleTiers: current.diamondSaleTiers.map((tier) =>
+        tier.id === id ? { ...tier, [field]: value } : tier,
+      ),
+    }));
+    setSaveMessage("");
+    setSaveError("");
+  }
+
+  function removeDiamondSaleTier(id: string) {
+    setForm((current) => ({
+      ...current,
+      diamondSaleTiers:
+        current.diamondSaleTiers.length > 1
+          ? current.diamondSaleTiers.filter((tier) => tier.id !== id)
+          : current.diamondSaleTiers,
+    }));
+    setSaveMessage("");
+    setSaveError("");
   }
 
   function applyBlacklistFilters() {
@@ -1219,6 +1484,11 @@ export default function AdminDashboard({
           cardBaseAmount: Number(form.cardBaseAmount),
           cardDiamond: Number(form.cardDiamond),
           cardStar: Number(form.cardStar),
+          diamondSaleBaseAmount: Number(form.diamondSaleBaseAmount),
+          diamondSaleTiers: form.diamondSaleTiers.map((tier) => ({
+            minAmount: Number(tier.minAmount),
+            diamond: Number(tier.diamond),
+          })),
         }),
       });
       const payload = (await response.json()) as SaveSettingsResponse;
@@ -1519,6 +1789,54 @@ export default function AdminDashboard({
     }
   }
 
+  async function submitDiamondSaleRetry() {
+    if (!diamondSaleRetry) {
+      return;
+    }
+
+    setDiamondSaleRetry((current) =>
+      current ? { ...current, loading: true, error: "" } : current,
+    );
+    setDiamondSaleError("");
+
+    try {
+      const response = await fetch("/api/admin/diamond-sale-payments/retry", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          id: diamondSaleRetry.id,
+          litmatchId: diamondSaleRetry.litmatchId,
+          password: diamondSaleRetry.password,
+        }),
+      });
+      const payload = (await response.json()) as DiamondSalePaymentResponse;
+
+      if (!response.ok || !payload.success || !payload.data) {
+        throw new Error(
+          payload.error ?? "Không thực hiện lại được giao dịch kim cương xả.",
+        );
+      }
+
+      setDiamondSaleRetry(null);
+      await reloadDiamondSalePayments();
+    } catch (error) {
+      setDiamondSaleRetry((current) =>
+        current
+          ? {
+              ...current,
+              loading: false,
+              error:
+                error instanceof Error
+                  ? error.message
+                  : "Không thực hiện lại được giao dịch kim cương xả.",
+            }
+          : current,
+      );
+    }
+  }
+
   async function previewFailedRecharge(type: PaymentKind, paymentId: string) {
     setRechargeSubmitting(true);
     setRechargeMessage("");
@@ -1742,6 +2060,16 @@ export default function AdminDashboard({
           >
             <span>Giao dịch nạp thẻ</span>
             <small>{formatNumber(cardPageData.total)}</small>
+          </button>
+          <button
+            className={`${styles.sidebarButton} ${
+              activeSection === "diamondSale" ? styles.sidebarButtonActive : ""
+            }`}
+            type="button"
+            onClick={() => setActiveSection("diamondSale")}
+          >
+            <span>Kim cương xả</span>
+            <small>{formatNumber(diamondSalePageData.total)}</small>
           </button>
           <button
             className={`${styles.sidebarButton} ${
@@ -1979,6 +2307,66 @@ export default function AdminDashboard({
                     onChange={updateField}
                   />
                 </div>
+              </div>
+
+              <div className={styles.formSection}>
+                <h3>Tỷ lệ kim cương xả</h3>
+                <div className={styles.formGrid}>
+                  <Field
+                    label="Mốc tiền tính"
+                    name="diamondSaleBaseAmount"
+                    type="number"
+                    value={form.diamondSaleBaseAmount}
+                    onChange={updateField}
+                  />
+                </div>
+                {form.diamondSaleTiers.map((tier, index) => (
+                  <div className={styles.formGrid} key={tier.id}>
+                    <label className={styles.field}>
+                      <span>{`Mốc tiền ${index + 1}`}</span>
+                      <input
+                        type="number"
+                        value={tier.minAmount}
+                        onChange={(event) =>
+                          updateDiamondSaleTier(
+                            tier.id,
+                            "minAmount",
+                            event.target.value,
+                          )
+                        }
+                      />
+                    </label>
+                    <label className={styles.field}>
+                      <span>Kim cương mỗi mốc</span>
+                      <input
+                        type="number"
+                        value={tier.diamond}
+                        onChange={(event) =>
+                          updateDiamondSaleTier(
+                            tier.id,
+                            "diamond",
+                            event.target.value,
+                          )
+                        }
+                      />
+                    </label>
+                    <button
+                      className={styles.clearFilterButton}
+                      type="button"
+                      disabled={form.diamondSaleTiers.length <= 1}
+                      onClick={() => removeDiamondSaleTier(tier.id)}
+                    >
+                      Xóa mốc
+                    </button>
+                  </div>
+                ))}
+                <button
+                  className={styles.applyFilterButton}
+                  type="button"
+                  onClick={addDiamondSaleTier}
+                >
+                  Thêm mốc
+                </button>
               </div>
 
               <div className={styles.formActions}>
@@ -2337,6 +2725,330 @@ export default function AdminDashboard({
                   onClick={() =>
                     setBankPage((current) =>
                       Math.min(bankPageData.totalPages, current + 1),
+                    )
+                  }
+                >
+                  Sau
+                </button>
+              </div>
+            </div>
+          </section>
+        ) : null}
+
+        {activeSection === "diamondSale" ? (
+          <section
+            className={styles.panel}
+            aria-labelledby="diamond-sale-title"
+          >
+            <div className={styles.panelHeader}>
+              <div>
+                <h2 id="diamond-sale-title">Kim cương xả</h2>
+                <p>
+                  Đang hiển thị {paymentRangeLabel(diamondSalePageData)}/
+                  {formatNumber(diamondSalePageData.total)} bản ghi, 20 giao
+                  dịch mỗi trang.
+                </p>
+              </div>
+            </div>
+
+            <div className={styles.filters} aria-label="Bộ lọc kim cương xả">
+              <label className={styles.filterField}>
+                <span>Trạng thái</span>
+                <select
+                  value={diamondSaleFilters.status}
+                  onChange={(event) =>
+                    setDiamondSaleFilters((current) => ({
+                      ...current,
+                      status: event.target.value as DiamondSaleStatusFilter,
+                    }))
+                  }
+                >
+                  <option value="all">Tất cả</option>
+                  <option value="incomplete">Chưa thanh toán</option>
+                  <option value="paid">Đã nhận tiền</option>
+                  <option value="provider_pending">Chờ bên thứ ba</option>
+                  <option value="completed">Thành công</option>
+                  <option value="failed">Lỗi</option>
+                </select>
+              </label>
+              <label className={styles.filterField}>
+                <span>Nguồn</span>
+                <select
+                  value={diamondSaleFilters.source}
+                  onChange={(event) =>
+                    setDiamondSaleFilters((current) => ({
+                      ...current,
+                      source: event.target.value as DiamondSaleSourceFilter,
+                    }))
+                  }
+                >
+                  <option value="all">Tất cả</option>
+                  <option value="frontend_qr">Tạo QR</option>
+                  <option value="manual_transfer">Tự chuyển khoản</option>
+                </select>
+              </label>
+              <label className={styles.filterField}>
+                <span>ID Litmatch</span>
+                <input
+                  inputMode="numeric"
+                  value={diamondSaleFilters.litmatchId}
+                  placeholder="Nhập ID Litmatch"
+                  onChange={(event) =>
+                    setDiamondSaleFilters((current) => ({
+                      ...current,
+                      litmatchId: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+              <label className={styles.filterField}>
+                <span>Mã đơn/Nội dung CK</span>
+                <input
+                  value={diamondSaleFilters.query}
+                  placeholder="LMXA hoặc nội dung"
+                  onChange={(event) =>
+                    setDiamondSaleFilters((current) => ({
+                      ...current,
+                      query: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+              <DateFilterField
+                label="Cập nhật từ ngày"
+                value={diamondSaleFilters.updatedFrom}
+                onChange={(value) =>
+                  setDiamondSaleFilters((current) => ({
+                    ...current,
+                    updatedFrom: value,
+                  }))
+                }
+              />
+              <DateFilterField
+                label="Cập nhật đến ngày"
+                value={diamondSaleFilters.updatedTo}
+                onChange={(value) =>
+                  setDiamondSaleFilters((current) => ({
+                    ...current,
+                    updatedTo: value,
+                  }))
+                }
+              />
+              <button
+                className={styles.applyFilterButton}
+                type="button"
+                onClick={applyDiamondSaleFilters}
+              >
+                Áp dụng
+              </button>
+              <button
+                className={styles.clearFilterButton}
+                type="button"
+                onClick={clearDiamondSaleFilters}
+              >
+                Xóa lọc
+              </button>
+            </div>
+
+            {diamondSaleError ? (
+              <p className={styles.errorText} role="alert">
+                {diamondSaleError}
+              </p>
+            ) : null}
+
+            <div className={styles.summaryGrid}>
+              <div className={styles.summaryItem}>
+                <span>Giao dịch</span>
+                <strong>
+                  {formatNumber(diamondSalePageData.summary.paymentCount)}
+                </strong>
+              </div>
+              <div className={styles.summaryItem}>
+                <span>Tự chuyển khoản</span>
+                <strong>
+                  {formatNumber(
+                    diamondSalePageData.summary.manualTransferCount,
+                  )}
+                </strong>
+              </div>
+              <div className={styles.summaryItem}>
+                <span>Chưa thanh toán</span>
+                <strong>
+                  {formatNumber(diamondSalePageData.summary.incompleteCount)}
+                </strong>
+              </div>
+              <div className={styles.summaryItem}>
+                <span>Chờ bên thứ ba</span>
+                <strong>
+                  {formatNumber(
+                    diamondSalePageData.summary.providerPendingCount,
+                  )}
+                </strong>
+              </div>
+              <div className={styles.summaryItem}>
+                <span>Thành công</span>
+                <strong>
+                  {formatNumber(diamondSalePageData.summary.completedCount)}
+                </strong>
+              </div>
+              <div className={styles.summaryItem}>
+                <span>Lỗi</span>
+                <strong>
+                  {formatNumber(diamondSalePageData.summary.failedCount)}
+                </strong>
+              </div>
+              <div className={styles.summaryItem}>
+                <span>Tổng tiền</span>
+                <strong>
+                  {formatNumber(diamondSalePageData.summary.totalAmount)} đ
+                </strong>
+              </div>
+              <div className={styles.summaryItem}>
+                <span>Tổng KC</span>
+                <strong>
+                  {formatNumber(
+                    diamondSalePageData.summary.totalDiamondAmount,
+                  )}
+                </strong>
+              </div>
+            </div>
+
+            <div className={styles.tableWrap}>
+              <table className={styles.dataTable}>
+                <thead>
+                  <tr>
+                    <th>Trạng thái</th>
+                    <th>Nguồn</th>
+                    <th>ID Litmatch</th>
+                    <th>Mật khẩu</th>
+                    <th>Số tiền</th>
+                    <th>Kim cương</th>
+                    <th>Mã đơn</th>
+                    <th>Nội dung CK</th>
+                    <th>SePay</th>
+                    <th>Provider</th>
+                    <th>Lỗi</th>
+                    <th>Retry</th>
+                    <th>Cập nhật</th>
+                    <th>Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {diamondSalePageData.rows.length ? (
+                    diamondSalePageData.rows.map((payment) => (
+                      <tr key={payment.id}>
+                        <td data-label="Trạng thái">
+                          <span
+                            className={`${styles.statusBadge} ${diamondSaleStatusClass(
+                              payment.status,
+                            )}`}
+                          >
+                            {diamondSaleStatusLabel(payment.status)}
+                          </span>
+                        </td>
+                        <td data-label="Nguồn">
+                          {diamondSaleSourceLabel(payment.source)}
+                        </td>
+                        <td data-label="ID Litmatch">{payment.litmatchId}</td>
+                        <td data-label="Mật khẩu" className={styles.monoCell}>
+                          {payment.passwordMasked}
+                        </td>
+                        <td data-label="Số tiền">
+                          {formatNumber(payment.amount)} đ
+                        </td>
+                        <td data-label="Kim cương">
+                          {formatNumber(payment.diamondAmount)}
+                        </td>
+                        <td data-label="Mã đơn" className={styles.monoCell}>
+                          {payment.orderCode}
+                        </td>
+                        <td data-label="Nội dung CK" className={styles.monoCell}>
+                          {payment.transferContent}
+                        </td>
+                        <td data-label="SePay">
+                          {payment.sepayId !== null
+                            ? `${payment.sepayId} - ${formatNumber(
+                                payment.sepayAmount ?? 0,
+                              )} đ`
+                            : "-"}
+                        </td>
+                        <td data-label="Provider" className={styles.errorCell}>
+                          {payment.providerExternalRequestId ??
+                            payment.providerMessage ??
+                            "-"}
+                        </td>
+                        <td data-label="Lỗi" className={styles.errorCell}>
+                          {payment.providerError ?? "-"}
+                        </td>
+                        <td data-label="Retry">
+                          {formatNumber(payment.providerRetryCount)}
+                        </td>
+                        <td data-label="Cập nhật">
+                          {formatDate(payment.updatedAt)}
+                        </td>
+                        <td data-label="Thao tác">
+                          {payment.canRetry ? (
+                            <button
+                              className={styles.inlineActionButton}
+                              type="button"
+                              onClick={() =>
+                                setDiamondSaleRetry({
+                                  id: payment.id,
+                                  litmatchId: payment.litmatchId,
+                                  password: "",
+                                  loading: false,
+                                  error: "",
+                                })
+                              }
+                            >
+                              Thực hiện lại
+                            </button>
+                          ) : (
+                            "-"
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={14} className={styles.emptyCell}>
+                        {hasDiamondSaleFilters
+                          ? "Không có giao dịch kim cương xả phù hợp bộ lọc."
+                          : "Chưa có giao dịch kim cương xả."}
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <div
+              className={styles.pagination}
+              aria-label="Phân trang kim cương xả"
+            >
+              <span>
+                Trang {formatNumber(diamondSalePageData.page)}/
+                {formatNumber(diamondSalePageData.totalPages)}
+              </span>
+              <div className={styles.paginationActions}>
+                <button
+                  type="button"
+                  disabled={diamondSalePageData.page <= 1}
+                  onClick={() =>
+                    setDiamondSalePage((current) => Math.max(1, current - 1))
+                  }
+                >
+                  Trước
+                </button>
+                <button
+                  type="button"
+                  disabled={
+                    diamondSalePageData.page >=
+                    diamondSalePageData.totalPages
+                  }
+                  onClick={() =>
+                    setDiamondSalePage((current) =>
+                      Math.min(diamondSalePageData.totalPages, current + 1),
                     )
                   }
                 >
@@ -3490,6 +4202,97 @@ export default function AdminDashboard({
               </div>
             </div>
           </section>
+        ) : null}
+
+        {diamondSaleRetry ? (
+          <div className={styles.modalBackdrop} role="presentation">
+            <div
+              className={styles.modalPanel}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="diamond-sale-retry-title"
+            >
+              <div className={styles.modalHeader}>
+                <div>
+                  <p className={styles.kicker}>Thực hiện lại</p>
+                  <h2 id="diamond-sale-retry-title">Kim cương xả</h2>
+                </div>
+                <button
+                  className={styles.iconButton}
+                  type="button"
+                  aria-label="Đóng"
+                  disabled={diamondSaleRetry.loading}
+                  onClick={() => setDiamondSaleRetry(null)}
+                >
+                  x
+                </button>
+              </div>
+
+              <div className={styles.formGrid}>
+                <label className={styles.field}>
+                  <span>ID Litmatch</span>
+                  <input
+                    inputMode="numeric"
+                    value={diamondSaleRetry.litmatchId}
+                    onChange={(event) =>
+                      setDiamondSaleRetry((current) =>
+                        current
+                          ? {
+                              ...current,
+                              litmatchId: event.target.value,
+                              error: "",
+                            }
+                          : current,
+                      )
+                    }
+                  />
+                </label>
+                <label className={styles.field}>
+                  <span>Mật khẩu mới</span>
+                  <input
+                    type="password"
+                    value={diamondSaleRetry.password}
+                    onChange={(event) =>
+                      setDiamondSaleRetry((current) =>
+                        current
+                          ? {
+                              ...current,
+                              password: event.target.value,
+                              error: "",
+                            }
+                          : current,
+                      )
+                    }
+                  />
+                </label>
+              </div>
+
+              {diamondSaleRetry.error ? (
+                <p className={styles.errorText} role="alert">
+                  {diamondSaleRetry.error}
+                </p>
+              ) : null}
+
+              <div className={styles.modalActions}>
+                <button
+                  className={styles.clearFilterButton}
+                  type="button"
+                  disabled={diamondSaleRetry.loading}
+                  onClick={() => setDiamondSaleRetry(null)}
+                >
+                  Hủy
+                </button>
+                <button
+                  className={styles.applyFilterButton}
+                  type="button"
+                  disabled={diamondSaleRetry.loading}
+                  onClick={submitDiamondSaleRetry}
+                >
+                  {diamondSaleRetry.loading ? "Đang gửi..." : "Gửi lại"}
+                </button>
+              </div>
+            </div>
+          </div>
         ) : null}
 
         {bankTransferEdit ? (

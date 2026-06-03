@@ -11,6 +11,7 @@ export default async function Home() {
       bankConfig={runtimeConfig.bank}
       bankRateConfig={runtimeConfig.bankRate}
       cardRateConfig={runtimeConfig.cardRate}
+      diamondSaleRateConfig={runtimeConfig.diamondSaleRate}
       siteConfig={runtimeConfig.site}
     />
   );

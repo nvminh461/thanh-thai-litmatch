@@ -10,7 +10,12 @@ export async function GET(request: Request) {
   const type = searchParams.get("type");
   const id = searchParams.get("id") ?? "";
 
-  if (type !== "bank" && type !== "card" && type !== "lifetime-bank-qr") {
+  if (
+    type !== "bank" &&
+    type !== "card" &&
+    type !== "lifetime-bank-qr" &&
+    type !== "diamond-sale"
+  ) {
     return NextResponse.json(
       {
         success: false,

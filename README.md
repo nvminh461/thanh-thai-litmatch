@@ -1,6 +1,6 @@
 # Thanh Thái Litmatch
 
-Ứng dụng Next.js để tạo QR chuyển khoản/nạp thẻ, lưu giao dịch vào MongoDB, nhận webhook SePay/PAY1S và tự động nạp kim cương hoặc sao qua Litmatch agent.
+Ứng dụng Next.js để tạo QR chuyển khoản/nạp thẻ/kim cương xả, lưu giao dịch vào MongoDB, nhận webhook SePay/PAY1S/bên thứ ba và tự động nạp kim cương hoặc sao.
 
 ## Luồng Chính
 
@@ -11,6 +11,14 @@ Chuyển khoản:
 3. SePay gọi `/api/webhooks/sepay`; server xác thực `Authorization: Apikey <token>`, match mã chuyển khoản và số tiền.
 4. Giao dịch chuyển sang `paid`, server xác minh lại ID Litmatch và gọi Litmatch agent `transfer_accounts`.
 5. Thành công thì `completed`; lỗi xác minh hoặc lỗi API thì `recharge_failed`.
+
+Kim cương xả:
+
+1. Người dùng chọn nút `$` trong cụm Kim cương/Sao, nhập số tiền, ID Litmatch và mật khẩu.
+2. Server tính số kim cương theo `diamondSaleRate`, sinh nội dung `LMXA {idLitmatch} {matkhau} {maDon}`, lưu `diamond_sale_payments.status = incomplete`.
+3. SePay báo tiền vào thì server ưu tiên match `{maDon}` và đúng số tiền, chuyển giao dịch sang `paid`, gọi API bên thứ ba và chuyển `provider_pending`.
+4. Nếu khách tự chuyển khoản không tạo QR trước với nội dung `LMXA {idLitmatch} {matkhau}`, server tự tạo giao dịch `source = manual_transfer`, tính kim cương theo số tiền SePay và gọi API bên thứ ba.
+5. Webhook bên thứ ba gọi `/api/webhooks/diamond-sale` để chốt `completed` hoặc `failed`. Admin có thể retry giao dịch lỗi với ID/mật khẩu mới.
 
 QR chuyển khoản trọn đời:
 
@@ -55,6 +63,11 @@ PAY1S_PARTNER_ID=your_partner_id
 PAY1S_PARTNER_KEY=your_partner_key
 PAY1S_BASE_URL=https://doithe1s.vn/chargingws/v2
 
+DIAMOND_SALE_API_URL=https://third-party.example.com/api/recharge
+DIAMOND_SALE_API_KEY=your_diamond_sale_api_key
+DIAMOND_SALE_WEBHOOK_API_KEY=your_diamond_sale_webhook_key
+DIAMOND_SALE_CALLBACK_URL=https://your-domain.com/api/webhooks/diamond-sale
+
 ADMIN_USERNAME=admin
 ADMIN_PASSWORD=change_me
 ADMIN_SESSION_SECRET=replace_with_a_long_random_secret
@@ -64,6 +77,7 @@ Tỉ giá không lấy từ env. Khi DB chưa có cấu hình mới, hệ thốn
 
 - Chuyển khoản: `1000 VND = 270 sao, 27 kim cương`.
 - Nạp thẻ: `1000 VND = 220 sao, 22 kim cương`.
+- Kim cương xả: `1000 VND = 38 KC` dưới `1.000.000`, `1000 VND = 40 KC` từ `1.000.000`.
 
 VietQR cũng không lấy từ env. Cấu hình ngân hàng, số tài khoản, chủ tài khoản và template QR được lưu trong MongoDB qua admin.
 
@@ -157,16 +171,19 @@ npm run reset-admin-password -- --username admin --password "new-password"
 
 Admin có các màn:
 
-- Cấu hình hệ thống: VietQR, tỉ lệ chuyển khoản, tỉ lệ nạp thẻ, thông tin liên hệ và link GROUP CSKH riêng.
+- Cấu hình hệ thống: VietQR, tỉ lệ chuyển khoản, tỉ lệ nạp thẻ, tỉ lệ kim cương xả theo tier, thông tin liên hệ và link GROUP CSKH riêng.
 - Giao dịch chuyển khoản: lọc trạng thái, ID Litmatch, nội dung chuyển khoản, ngày cập nhật, phân biệt QR cố định/QR trọn đời, phân trang 20 giao dịch/trang.
 - Giao dịch nạp thẻ: lọc trạng thái, ID Litmatch, ghi chú, ngày cập nhật, thống kê theo bộ lọc, thông tin PAY1S/callback, trạng thái nạp Litmatch, phân trang 20 giao dịch/trang.
+- Kim cương xả: lọc trạng thái, nguồn tạo QR/tự chuyển khoản, ID Litmatch, mã đơn/nội dung CK, ngày cập nhật, thống kê theo bộ lọc và retry giao dịch lỗi.
 
 Các trạng thái giao dịch:
 
 - `incomplete`: đã tạo giao dịch, chưa thanh toán/chưa gửi xử lý.
 - `processing`: thẻ đã gửi sang PAY1S, đang chờ callback.
 - `paid`: đã nhận tiền hoặc thẻ đúng, đang xử lý nạp.
+- `provider_pending`: kim cương xả đã gửi sang bên thứ ba, chờ webhook chốt.
 - `completed`: đã nạp Litmatch thành công.
+- `failed`: kim cương xả lỗi bên thứ ba hoặc chưa gọi được API bên thứ ba.
 - `recharge_failed`: đã nhận kết quả nhưng xác minh ID, provider hoặc API nạp Litmatch lỗi.
 
 ## Webhook
@@ -219,7 +236,7 @@ Payload SePay cần có các trường chính:
 }
 ```
 
-Ứng dụng match theo `payload.code` trước. Nếu `code` trống, hệ thống tìm mã `LM...` trong `payload.content`.
+Ứng dụng match theo `payload.code` trước. Nếu `code` trống, hệ thống tìm mã `LM...`/nội dung `LMXA...` trong `payload.content`.
 
 Với QR thường:
 
@@ -242,9 +259,20 @@ LMSAO THANHTHAI 123456789
 - `THANHTHAI`: mã CTV/đại lý tùy chọn, chỉ dùng chữ/số không dấu.
 - `123456789`: ID Litmatch.
 
+Với kim cương xả:
+
+```text
+LMXA 123456789 matkhau LMXAABC12345
+LMXA 123456789 matkhau
+```
+
+- Format có `maDon` dùng cho QR tạo từ web, phải khớp đúng giao dịch `incomplete` và đúng số tiền.
+- Format không có `maDon` dùng cho khách tự chuyển khoản; hệ thống tự tạo giao dịch `manual_transfer` theo số tiền SePay.
+- Mật khẩu là một token không có khoảng trắng/control, tối đa 64 ký tự.
+
 Phản hồi webhook:
 
-- Thành công (`200`): `ignored`, `recharge_completed`, `already_paid`, `duplicate` (đã xử lý trước đó).
+- Thành công (`200`): `ignored`, `provider_pending`, `recharge_completed`, `already_paid`, `duplicate` (đã xử lý trước đó).
 - Lỗi nghiệp vụ (`422`): `unmatched`, `amount_mismatch` — SePay có thể gửi lại thủ công; webhook trước đó ở các trạng thái này sẽ được xử lý lại khi gửi lại cùng `id`.
 - Lỗi nạp Litmatch (`500`): `recharge_failed` — có thể gửi lại để thử nạp lại nếu giao dịch ngân hàng đã được ghi nhận.
 - Payload/API key không hợp lệ: `400` / `401`.
@@ -352,9 +380,58 @@ Checklist test PAY1S:
 4. Kiểm tra admin phần `Giao dịch nạp thẻ`: giao dịch phải có `requestId` và trạng thái `processing` hoặc trạng thái kết quả từ provider.
 5. Khi provider callback, kiểm tra `card_webhook_events` và trạng thái giao dịch trong admin.
 
+### Kim Cương Xả Provider
+
+Khi SePay ghi nhận giao dịch LMXA đã nhận tiền, app POST JSON sang `DIAMOND_SALE_API_URL`.
+
+Header:
+
+```text
+Content-Type: application/json
+Authorization: Apikey <DIAMOND_SALE_API_KEY>
+```
+
+Body:
+
+```json
+{
+  "paymentId": "665f8f3e0000000000000001",
+  "orderCode": "LMXAABC12345",
+  "source": "frontend_qr",
+  "litmatchId": "123456789",
+  "password": "matkhau",
+  "diamondAmount": 40000,
+  "amount": 1000000,
+  "transferContent": "LMXA 123456789 matkhau LMXAABC12345",
+  "callbackUrl": "https://your-domain.com/api/webhooks/diamond-sale"
+}
+```
+
+Bên thứ ba xử lý xong gọi:
+
+```text
+POST https://your-domain.com/api/webhooks/diamond-sale
+Authorization: Apikey <DIAMOND_SALE_WEBHOOK_API_KEY>
+Content-Type: application/json
+```
+
+Body webhook:
+
+```json
+{
+  "paymentId": "665f8f3e0000000000000001",
+  "orderCode": "LMXAABC12345",
+  "externalRequestId": "provider-req-001",
+  "status": "success",
+  "message": "Da nap thanh cong"
+}
+```
+
+`status = success` chốt `diamond_sale_payments.status = completed`; `status = failed` chốt `failed`. Webhook lặp cùng `paymentId/orderCode + externalRequestId + status` được trả `duplicate`.
+
 ## Ghi Chú Vận Hành
 
-- `DATABASE_URL`, `SEPAY_WEBHOOK_API_KEY`, `PAY1S_*`, `TOTP_*`, `LIT_AGENT_*` và `ADMIN_SESSION_SECRET` chỉ cấu hình trong env.
+- `DATABASE_URL`, `SEPAY_WEBHOOK_API_KEY`, `PAY1S_*`, `DIAMOND_SALE_*`, `TOTP_*`, `LIT_AGENT_*` và `ADMIN_SESSION_SECRET` chỉ cấu hình trong env.
 - VietQR, tỉ lệ nạp và prefix mã thanh toán được lưu trong MongoDB và chỉnh trong admin.
 - Webhook duplicate không nạp lại nhờ unique index trên `sepay.id` và `card_webhook_events.eventKey`.
 - QR chuyển khoản trọn đời không hết hạn trong ứng dụng; muốn vô hiệu hóa mã cũ cần bổ sung màn quản trị riêng.

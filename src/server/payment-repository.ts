@@ -8,6 +8,11 @@ import type {
   AdminBankPaymentSummary,
   AdminCardPaymentRow,
   AdminCardPaymentSummary,
+  AdminDiamondSalePaymentRow,
+  AdminDiamondSalePaymentSource,
+  AdminDiamondSalePaymentStatus,
+  AdminDiamondSalePaymentSummary,
+  AdminPaginatedDiamondSalePayments,
   AdminPaginatedBankPayments,
   AdminPaginatedBankQrBlacklist,
   AdminPaginatedCardPayments,
@@ -24,11 +29,13 @@ import type {
 } from "@/lib/admin-types";
 import {
   buildVietQrUrl,
+  calculateDiamondSaleAmount,
   calculateReceiveAmount,
   cardDenominations,
   cardProviders,
   normalizeLitmatchId,
   type BankConfig,
+  type DiamondSaleRateConfig,
   type RateConfig,
   type RewardType,
   type RuntimeConfig,
@@ -57,6 +64,8 @@ const CARD_REQUEST_ID_MIN = 100000000;
 const CARD_REQUEST_ID_MAX = 1000000000;
 const LIFETIME_QR_DIAMOND_PREFIX = "LMKC";
 const LIFETIME_QR_STAR_PREFIX = "LMSAO";
+const DIAMOND_SALE_PREFIX = "LMXA";
+const DIAMOND_SALE_ORDER_CODE_LENGTH = 8;
 const BANK_QR_BLACKLIST_INCOMPLETE_LIMIT = 5;
 const BANK_QR_BLACKLIST_REASON =
   "Có 5 giao dịch chuyển khoản chưa thanh toán liên tiếp.";
@@ -103,7 +112,53 @@ type ConfigSnapshot = {
   bank?: BankConfig;
   bankRate?: RateConfig;
   cardRate?: RateConfig;
+  diamondSaleRate?: DiamondSaleRateConfig;
   paymentCodePrefix: string;
+};
+
+type DiamondSalePaymentStatus = AdminDiamondSalePaymentStatus;
+type DiamondSalePaymentSource = AdminDiamondSalePaymentSource;
+
+type DiamondSaleProviderState = {
+  status: "pending" | "accepted" | "failed" | "completed";
+  externalRequestId?: string;
+  request?: DiamondSaleProviderRequestBody;
+  response?: unknown;
+  message?: string;
+  error?: string;
+  retryCount?: number;
+  requestedAt?: Date;
+  acceptedAt?: Date;
+  completedAt?: Date;
+  failedAt?: Date;
+  webhookPayload?: DiamondSaleProviderWebhookPayload;
+};
+
+export type DiamondSalePaymentDocument = {
+  _id?: ObjectId;
+  source: DiamondSalePaymentSource;
+  status: DiamondSalePaymentStatus;
+  litmatchId: string;
+  password: string;
+  amount: number;
+  diamondAmount: number;
+  orderCode: string;
+  transferContent: string;
+  configSnapshot: ConfigSnapshot;
+  sepay?: {
+    id: number;
+    gateway: string;
+    transactionDate: string;
+    accountNumber: string;
+    content: string;
+    transferAmount: number;
+    referenceCode: string;
+    payload: SePayWebhookPayload;
+  };
+  paidAt?: Date;
+  provider?: DiamondSaleProviderState;
+  createdAt: Date;
+  updatedAt: Date;
 };
 
 export type BankPaymentDocument = {
@@ -272,6 +327,7 @@ type SePayWebhookEventDocument = {
     | "unmatched"
     | "amount_mismatch"
     | "already_paid"
+    | "provider_pending"
     | "recharge_completed"
     | "recharge_failed";
   payload: SePayWebhookPayload;
@@ -291,7 +347,7 @@ export type SePayWebhookProcessResult = {
 
 const SEPAY_WEBHOOK_SUCCESS_STATUSES = new Set<
   SePayWebhookProcessResult["status"]
->(["ignored", "recharge_completed", "already_paid", "duplicate"]);
+>(["ignored", "provider_pending", "recharge_completed", "already_paid", "duplicate"]);
 
 const SEPAY_WEBHOOK_RETRIABLE_STATUSES = new Set<
   SePayWebhookProcessResult["status"]
@@ -328,6 +384,38 @@ type CardWebhookEventDocument = {
   updatedAt: Date;
 };
 
+type DiamondSaleProviderRequestBody = {
+  paymentId: string;
+  orderCode: string;
+  source: DiamondSalePaymentSource;
+  litmatchId: string;
+  password: string;
+  diamondAmount: number;
+  amount: number;
+  transferContent: string;
+  callbackUrl?: string;
+};
+
+export type DiamondSaleProviderWebhookPayload = {
+  paymentId?: string;
+  orderCode?: string;
+  externalRequestId?: string;
+  status?: "success" | "failed" | string;
+  message?: string;
+};
+
+type DiamondSaleWebhookEventDocument = {
+  _id?: ObjectId;
+  eventKey: string;
+  status: "received" | "duplicate" | "processed" | "unmatched" | "failed";
+  payload: DiamondSaleProviderWebhookPayload;
+  rawBody: string;
+  paymentId?: ObjectId;
+  message?: string;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
 export type PaymentListInput = {
   page?: number;
   pageSize?: number;
@@ -357,6 +445,17 @@ export type DirectRechargeListInput = {
   updatedTo?: string;
 };
 
+export type DiamondSalePaymentListInput = {
+  page?: number;
+  pageSize?: number;
+  status?: DiamondSalePaymentStatus | "all";
+  source?: DiamondSalePaymentSource | "all";
+  litmatchId?: string;
+  query?: string;
+  updatedFrom?: string;
+  updatedTo?: string;
+};
+
 export type BankQrBlacklistListInput = {
   page?: number;
   pageSize?: number;
@@ -370,9 +469,9 @@ export type DeleteIncompletePaymentsResult = {
 
 export type PublicPaymentStatus = {
   id: string;
-  type: "bank" | "card";
+  type: "bank" | "card" | "diamond-sale";
   bankMode?: BankPaymentMode;
-  status: PaymentStatus;
+  status: PaymentStatus | DiamondSalePaymentStatus;
   litmatchId: string;
   rewardType: RewardType;
   rewardAmount: number;
@@ -444,6 +543,46 @@ function normalizePaymentLitmatchId(value: unknown) {
   }
 
   return litmatchId;
+}
+
+function normalizeDiamondSalePassword(value: unknown) {
+  const password = typeof value === "string" ? value.trim() : "";
+
+  if (
+    !password ||
+    password.length > 64 ||
+    /\s/.test(password) ||
+    /[\u0000-\u001F\u007F]/.test(password)
+  ) {
+    throw new PaymentValidationError(
+      "Mật khẩu kim cương xả không hợp lệ. Vui lòng nhập một chuỗi không có khoảng trắng, tối đa 64 ký tự.",
+    );
+  }
+
+  return password;
+}
+
+function maskDiamondSalePassword(password: string) {
+  if (!password) {
+    return "******";
+  }
+
+  if (password.length <= 2) {
+    return "******";
+  }
+
+  return `${password.slice(0, 1)}${"*".repeat(Math.min(password.length - 2, 6))}${password.slice(-1)}`;
+}
+
+function maskDiamondSaleTransferContent(transferContent: string) {
+  const parts = transferContent.trim().replace(/\s+/g, " ").split(" ");
+
+  if (parts.length >= 3 && parts[0].toUpperCase() === DIAMOND_SALE_PREFIX) {
+    parts[2] = "******";
+    return parts.join(" ");
+  }
+
+  return transferContent;
 }
 
 function normalizeLifetimeQrTransferContent(value: unknown) {
@@ -539,6 +678,16 @@ function generateTransferContent(prefix: string) {
   return `${prefix}${suffix}`;
 }
 
+function generateDiamondSaleOrderCode() {
+  let suffix = "";
+
+  for (let index = 0; index < DIAMOND_SALE_ORDER_CODE_LENGTH; index += 1) {
+    suffix += PAYMENT_CODE_CHARACTERS[randomInt(PAYMENT_CODE_CHARACTERS.length)];
+  }
+
+  return `${DIAMOND_SALE_PREFIX}${suffix}`;
+}
+
 function serializeDate(value?: Date | null) {
   return value ? value.toISOString() : null;
 }
@@ -576,6 +725,64 @@ function canRetryCardRecharge(payment: CardPaymentDocument) {
     payment.recharge?.status === "failed" &&
     payment.providerStatus === 1
   );
+}
+
+function canRetryDiamondSalePayment(payment: DiamondSalePaymentDocument) {
+  return payment.status === "failed" && Boolean(payment.paidAt || payment.sepay);
+}
+
+function serializeDiamondSalePayment(
+  payment: DiamondSalePaymentDocument,
+): AdminDiamondSalePaymentRow {
+  return {
+    id: payment._id?.toString() ?? "",
+    source: payment.source,
+    status: payment.status,
+    litmatchId: payment.litmatchId,
+    passwordMasked: maskDiamondSalePassword(payment.password),
+    amount: payment.amount,
+    diamondAmount: payment.diamondAmount,
+    orderCode: payment.orderCode,
+    transferContent: maskDiamondSaleTransferContent(payment.transferContent),
+    sepayId: payment.sepay?.id ?? null,
+    sepayAmount: payment.sepay?.transferAmount ?? null,
+    providerExternalRequestId: payment.provider?.externalRequestId ?? null,
+    providerMessage: payment.provider?.message ?? null,
+    providerError: payment.provider?.error ?? null,
+    providerRetryCount: payment.provider?.retryCount ?? 0,
+    createdAt: payment.createdAt.toISOString(),
+    updatedAt: payment.updatedAt.toISOString(),
+    paidAt: serializeDate(payment.paidAt),
+    canRetry: canRetryDiamondSalePayment(payment),
+  };
+}
+
+function serializePublicDiamondSalePayment(
+  payment: DiamondSalePaymentDocument,
+  fallbackId: string,
+): PublicPaymentStatus {
+  return {
+    id: payment._id?.toString() ?? fallbackId,
+    type: "diamond-sale",
+    status: payment.status,
+    litmatchId: payment.litmatchId,
+    rewardType: "diamond",
+    rewardAmount: payment.diamondAmount,
+    transferContent: maskDiamondSaleTransferContent(payment.transferContent),
+    amount: payment.amount,
+    providerMessage: payment.provider?.message ?? null,
+    rechargeStatus:
+      payment.status === "completed"
+        ? "completed"
+        : payment.status === "failed"
+          ? "failed"
+          : payment.status === "provider_pending"
+            ? "pending"
+            : null,
+    rechargeError: payment.provider?.error ?? null,
+    createdAt: payment.createdAt.toISOString(),
+    updatedAt: payment.updatedAt.toISOString(),
+  };
 }
 
 function serializeBankPayment(payment: BankPaymentDocument): AdminBankPaymentRow {
@@ -726,6 +933,64 @@ function getSePayLifetimeQrContentCandidate(payload: SePayWebhookPayload) {
   );
 }
 
+type DiamondSaleTransferContent = {
+  transferContent: string;
+  litmatchId: string;
+  password: string;
+  orderCode?: string;
+};
+
+function parseDiamondSaleTransferContent(value: string) {
+  const normalized = value.trim().replace(/\s+/g, " ");
+  const match = normalized.match(/^LMXA\s+(\d{5,20})\s+(\S+)(?:\s+(LMXA[A-Z0-9]{4,20}))?$/i);
+
+  if (!match) {
+    return null;
+  }
+
+  try {
+    return {
+      transferContent: `${DIAMOND_SALE_PREFIX} ${match[1]} ${normalizeDiamondSalePassword(match[2])}${
+        match[3] ? ` ${match[3].toUpperCase()}` : ""
+      }`,
+      litmatchId: normalizePaymentLitmatchId(match[1]),
+      password: normalizeDiamondSalePassword(match[2]),
+      orderCode: match[3]?.toUpperCase(),
+    } satisfies DiamondSaleTransferContent;
+  } catch {
+    return null;
+  }
+}
+
+function extractDiamondSaleTransferContent(content: string) {
+  const normalized = content.trim().replace(/\s+/g, " ");
+  const match = normalized.match(/LMXA\s+\d{5,20}\s+\S+(?:\s+LMXA[A-Z0-9]{4,20})?/i);
+
+  if (!match) {
+    return null;
+  }
+
+  return parseDiamondSaleTransferContent(match[0]);
+}
+
+function getSePayDiamondSaleTransferContent(payload: SePayWebhookPayload) {
+  const payloadCode =
+    typeof payload.code === "string" ? payload.code.trim() : "";
+
+  if (payloadCode) {
+    const parsedCode = parseDiamondSaleTransferContent(payloadCode);
+
+    if (parsedCode) {
+      return parsedCode;
+    }
+  }
+
+  return (
+    extractDiamondSaleTransferContent(payload.content ?? "") ??
+    extractDiamondSaleTransferContent(payload.description ?? "")
+  );
+}
+
 function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Không nạp được Litmatch.";
 }
@@ -736,6 +1001,186 @@ function getLitmatchValidationMessage(error: unknown) {
   }
 
   return getErrorMessage(error);
+}
+
+function getDiamondSaleProviderUrl() {
+  return process.env.DIAMOND_SALE_API_URL?.trim() ?? "";
+}
+
+function getDiamondSaleProviderApiKey() {
+  return process.env.DIAMOND_SALE_API_KEY?.trim() ?? "";
+}
+
+function getDiamondSaleCallbackUrl() {
+  return process.env.DIAMOND_SALE_CALLBACK_URL?.trim() || undefined;
+}
+
+function getResponseStringValue(payload: unknown, keys: string[]) {
+  if (typeof payload !== "object" || payload === null) {
+    return undefined;
+  }
+
+  const record = payload as Record<string, unknown>;
+
+  for (const key of keys) {
+    const value = record[key];
+
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return String(value);
+    }
+  }
+
+  return undefined;
+}
+
+function buildDiamondSaleProviderRequestBody(
+  payment: DiamondSalePaymentDocument,
+): DiamondSaleProviderRequestBody {
+  const paymentId = payment._id?.toString();
+
+  if (!paymentId) {
+    throw new Error("Diamond sale payment document is missing _id");
+  }
+
+  return {
+    paymentId,
+    orderCode: payment.orderCode,
+    source: payment.source,
+    litmatchId: payment.litmatchId,
+    password: payment.password,
+    diamondAmount: payment.diamondAmount,
+    amount: payment.amount,
+    transferContent: payment.transferContent,
+    callbackUrl: getDiamondSaleCallbackUrl(),
+  };
+}
+
+async function requestDiamondSaleProvider(
+  body: DiamondSaleProviderRequestBody,
+) {
+  const providerUrl = getDiamondSaleProviderUrl();
+
+  if (!providerUrl) {
+    throw new Error("Chưa cấu hình DIAMOND_SALE_API_URL.");
+  }
+
+  const apiKey = getDiamondSaleProviderApiKey();
+  const response = await fetch(providerUrl, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      ...(apiKey ? { authorization: `Apikey ${apiKey}` } : {}),
+    },
+    body: JSON.stringify(body),
+  });
+  const responseText = await response.text();
+  let responsePayload: unknown = null;
+
+  try {
+    responsePayload = responseText ? JSON.parse(responseText) : null;
+  } catch {
+    responsePayload = responseText;
+  }
+
+  if (!response.ok) {
+    const message =
+      getResponseStringValue(responsePayload, ["message", "error"]) ??
+      `API kim cương xả trả HTTP ${response.status}.`;
+
+    throw new Error(message);
+  }
+
+  return {
+    request: body,
+    response: responsePayload,
+    externalRequestId: getResponseStringValue(responsePayload, [
+      "externalRequestId",
+      "requestId",
+      "id",
+    ]),
+    message:
+      getResponseStringValue(responsePayload, ["message", "status"]) ??
+      "Đã gửi yêu cầu sang bên thứ ba.",
+  };
+}
+
+async function sendDiamondSalePaymentToProvider(
+  payment: DiamondSalePaymentDocument,
+  retryCount = payment.provider?.retryCount ?? 0,
+) {
+  const paymentId = payment._id;
+
+  if (!paymentId) {
+    throw new Error("Diamond sale payment document is missing _id");
+  }
+
+  const collection =
+    await getCollection<DiamondSalePaymentDocument>("diamond_sale_payments");
+  const requestedAt = new Date();
+  const requestBody = buildDiamondSaleProviderRequestBody(payment);
+
+  try {
+    const providerResult = await requestDiamondSaleProvider(requestBody);
+    const updatedAt = new Date();
+
+    await collection.updateOne(
+      { _id: paymentId },
+      {
+        $set: {
+          status: "provider_pending",
+          updatedAt,
+          provider: {
+            status: "pending",
+            externalRequestId: providerResult.externalRequestId,
+            request: providerResult.request,
+            response: providerResult.response,
+            message: providerResult.message,
+            retryCount,
+            requestedAt,
+            acceptedAt: updatedAt,
+          },
+        },
+      },
+    );
+
+    return {
+      status: "provider_pending" as const,
+      message: providerResult.message,
+    };
+  } catch (error) {
+    const failedAt = new Date();
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Không gửi được yêu cầu kim cương xả.";
+
+    await collection.updateOne(
+      { _id: paymentId },
+      {
+        $set: {
+          status: "failed",
+          updatedAt: failedAt,
+          provider: {
+            status: "failed",
+            request: requestBody,
+            error: message,
+            retryCount,
+            requestedAt,
+            failedAt,
+          },
+        },
+      },
+    );
+
+    return {
+      status: "failed" as const,
+      message,
+    };
+  }
 }
 
 function normalizeRewardAmount(value: unknown) {
@@ -1333,6 +1778,71 @@ function buildDirectRechargeFilter(input: DirectRechargeListInput) {
   return filter;
 }
 
+function buildDiamondSalePaymentFilter(input: DiamondSalePaymentListInput) {
+  const filter: Filter<DiamondSalePaymentDocument> = {};
+
+  if (
+    input.status === "incomplete" ||
+    input.status === "paid" ||
+    input.status === "provider_pending" ||
+    input.status === "completed" ||
+    input.status === "failed"
+  ) {
+    Object.assign(filter, { status: input.status });
+  }
+
+  if (input.source === "frontend_qr" || input.source === "manual_transfer") {
+    Object.assign(filter, { source: input.source });
+  }
+
+  const litmatchId = input.litmatchId?.replace(/\D/g, "");
+
+  if (litmatchId) {
+    Object.assign(filter, { litmatchId: { $regex: escapeRegex(litmatchId) } });
+  }
+
+  const queryTokens =
+    input.query
+      ?.trim()
+      .split(/\s+/)
+      .filter(Boolean) ?? [];
+
+  if (queryTokens.length) {
+    Object.assign(filter, {
+      $and: queryTokens.map((token) => ({
+        $or: [
+          {
+            orderCode: {
+              $regex: escapeRegex(token),
+              $options: "i",
+            },
+          },
+          {
+            transferContent: {
+              $regex: escapeRegex(token),
+              $options: "i",
+            },
+          },
+        ],
+      })),
+    });
+  }
+
+  const updatedFrom = parseVietnamDayStart(input.updatedFrom);
+  const updatedTo = parseVietnamDayEndExclusive(input.updatedTo);
+
+  if (updatedFrom || updatedTo) {
+    Object.assign(filter, {
+      updatedAt: {
+        ...(updatedFrom ? { $gte: updatedFrom } : {}),
+        ...(updatedTo ? { $lt: updatedTo } : {}),
+      },
+    });
+  }
+
+  return filter;
+}
+
 function buildLifetimeQrPaymentFilter(input: LifetimeQrReportInput) {
   const filter = {
     ...buildBankPaymentFilter(input),
@@ -1552,6 +2062,55 @@ async function summarizeDirectRecharges(
   return summary ?? emptyDirectRechargeSummary;
 }
 
+const emptyDiamondSalePaymentSummary: AdminDiamondSalePaymentSummary = {
+  paymentCount: 0,
+  manualTransferCount: 0,
+  incompleteCount: 0,
+  providerPendingCount: 0,
+  completedCount: 0,
+  failedCount: 0,
+  totalAmount: 0,
+  totalDiamondAmount: 0,
+};
+
+async function summarizeDiamondSalePayments(
+  filter: Filter<DiamondSalePaymentDocument>,
+) {
+  const collection =
+    await getCollection<DiamondSalePaymentDocument>("diamond_sale_payments");
+  const [summary] = await collection
+    .aggregate<AdminDiamondSalePaymentSummary>([
+      { $match: filter },
+      {
+        $group: {
+          _id: null,
+          paymentCount: { $sum: 1 },
+          manualTransferCount: {
+            $sum: { $cond: [{ $eq: ["$source", "manual_transfer"] }, 1, 0] },
+          },
+          incompleteCount: {
+            $sum: { $cond: [{ $eq: ["$status", "incomplete"] }, 1, 0] },
+          },
+          providerPendingCount: {
+            $sum: { $cond: [{ $eq: ["$status", "provider_pending"] }, 1, 0] },
+          },
+          completedCount: {
+            $sum: { $cond: [{ $eq: ["$status", "completed"] }, 1, 0] },
+          },
+          failedCount: {
+            $sum: { $cond: [{ $eq: ["$status", "failed"] }, 1, 0] },
+          },
+          totalAmount: { $sum: "$amount" },
+          totalDiamondAmount: { $sum: "$diamondAmount" },
+        },
+      },
+      { $project: { _id: 0 } },
+    ])
+    .toArray();
+
+  return summary ?? emptyDiamondSalePaymentSummary;
+}
+
 async function assertBankQrCreationAllowed(litmatchId: string) {
   const blacklist =
     await getCollection<BankQrBlacklistDocument>("bank_qr_blacklist");
@@ -1719,6 +2278,78 @@ export async function createBankPayment(input: {
   }
 
   throw new Error("Could not generate a unique transfer content");
+}
+
+export async function createDiamondSalePayment(input: {
+  litmatchId?: unknown;
+  password?: unknown;
+  amount?: unknown;
+}) {
+  const config = await getRuntimeConfig();
+  assertBankConfig(config);
+
+  const litmatchId = normalizePaymentLitmatchId(input.litmatchId);
+  const password = normalizeDiamondSalePassword(input.password);
+  const amount = normalizeAmount(input.amount);
+  const diamondAmount = calculateDiamondSaleAmount(
+    amount,
+    config.diamondSaleRate,
+  );
+  const collection =
+    await getCollection<DiamondSalePaymentDocument>("diamond_sale_payments");
+
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const orderCode = generateDiamondSaleOrderCode();
+    const transferContent = `${DIAMOND_SALE_PREFIX} ${litmatchId} ${password} ${orderCode}`;
+    const now = new Date();
+    const payment: DiamondSalePaymentDocument = {
+      source: "frontend_qr",
+      status: "incomplete",
+      litmatchId,
+      password,
+      amount,
+      diamondAmount,
+      orderCode,
+      transferContent,
+      configSnapshot: {
+        bank: config.bank,
+        diamondSaleRate: config.diamondSaleRate,
+        paymentCodePrefix: config.paymentCodePrefix,
+      },
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    try {
+      const result = await collection.insertOne(payment);
+
+      return {
+        id: result.insertedId.toString(),
+        type: "diamond-sale" as const,
+        amount,
+        rewardType: "diamond" as const,
+        rewardAmount: diamondAmount,
+        diamondAmount,
+        orderCode,
+        transferContent,
+        maskedTransferContent: maskDiamondSaleTransferContent(transferContent),
+        qrUrl: buildVietQrUrl(config.bank, amount, transferContent),
+      };
+    } catch (error) {
+      if (
+        typeof error === "object" &&
+        error !== null &&
+        "code" in error &&
+        error.code === 11000
+      ) {
+        continue;
+      }
+
+      throw error;
+    }
+  }
+
+  throw new Error("Could not generate a unique diamond sale order code");
 }
 
 export async function createLifetimeBankQr(input: {
@@ -2006,6 +2637,26 @@ export async function listCardPayments(
   return {
     ...page,
     summary: await summarizeCardPayments(filter),
+  };
+}
+
+export async function listDiamondSalePayments(
+  input: DiamondSalePaymentListInput = {},
+): Promise<AdminPaginatedDiamondSalePayments> {
+  const filter = buildDiamondSalePaymentFilter(input);
+  const page = await paginatePayments<
+    DiamondSalePaymentDocument,
+    AdminDiamondSalePaymentRow
+  >({
+    collectionName: "diamond_sale_payments",
+    filter,
+    input,
+    serialize: serializeDiamondSalePayment,
+  });
+
+  return {
+    ...page,
+    summary: await summarizeDiamondSalePayments(filter),
   };
 }
 
@@ -2588,6 +3239,87 @@ export async function updateDirectAdminRechargeNote(input: {
   return serializeDirectRecharge(updatedRecharge);
 }
 
+export async function retryDiamondSalePayment(input: {
+  id?: unknown;
+  litmatchId?: unknown;
+  password?: unknown;
+  adminUsername?: string;
+}): Promise<AdminDiamondSalePaymentRow> {
+  if (typeof input.id !== "string") {
+    throw new PaymentNotFoundError();
+  }
+
+  const paymentId = normalizePaymentObjectId(input.id);
+  const litmatchId = normalizePaymentLitmatchId(input.litmatchId);
+  const password = normalizeDiamondSalePassword(input.password);
+  const collection =
+    await getCollection<DiamondSalePaymentDocument>("diamond_sale_payments");
+  const payment = await collection.findOne({ _id: paymentId });
+
+  if (!payment) {
+    throw new PaymentNotFoundError();
+  }
+
+  if (!canRetryDiamondSalePayment(payment)) {
+    throw new PaymentValidationError(
+      "Giao dịch kim cương xả này không đủ điều kiện thực hiện lại.",
+    );
+  }
+
+  const retryCount = (payment.provider?.retryCount ?? 0) + 1;
+  const updatedAt = new Date();
+  const retryPayment: DiamondSalePaymentDocument = {
+    ...payment,
+    status: "paid",
+    litmatchId,
+    password,
+    updatedAt,
+    provider: {
+      status: "pending",
+      retryCount,
+      message: input.adminUsername
+        ? `Admin ${input.adminUsername} thực hiện lại.`
+        : "Admin thực hiện lại.",
+      requestedAt: updatedAt,
+    },
+  };
+
+  const updateResult = await collection.updateOne(
+    { _id: paymentId, status: "failed" },
+    {
+      $set: {
+        status: "paid",
+        litmatchId,
+        password,
+        updatedAt,
+        provider: retryPayment.provider,
+      },
+    },
+  );
+
+  if (!updateResult.modifiedCount) {
+    throw new PaymentValidationError(
+      "Giao dịch đã được xử lý trước đó. Vui lòng tải lại danh sách.",
+    );
+  }
+
+  const providerResult = await sendDiamondSalePaymentToProvider(
+    retryPayment,
+    retryCount,
+  );
+  const refreshedPayment = await collection.findOne({ _id: paymentId });
+
+  if (!refreshedPayment) {
+    throw new PaymentNotFoundError();
+  }
+
+  if (providerResult.status === "failed") {
+    return serializeDiamondSalePayment(refreshedPayment);
+  }
+
+  return serializeDiamondSalePayment(refreshedPayment);
+}
+
 export async function getLifetimeQrReport(
   input: LifetimeQrReportInput = {},
 ): Promise<AdminLifetimeQrReport> {
@@ -2785,7 +3517,7 @@ export async function deleteIncompleteCardPayments(
 }
 
 export async function getPublicPaymentStatus(input: {
-  type: "bank" | "card";
+  type: "bank" | "card" | "diamond-sale";
   id: string;
 }): Promise<PublicPaymentStatus> {
   const objectId = normalizePaymentObjectId(input.id);
@@ -2799,6 +3531,20 @@ export async function getPublicPaymentStatus(input: {
     }
 
     return serializePublicBankPayment(payment, input.id);
+  }
+
+  if (input.type === "diamond-sale") {
+    const collection =
+      await getCollection<DiamondSalePaymentDocument>(
+        "diamond_sale_payments",
+      );
+    const payment = await collection.findOne({ _id: objectId });
+
+    if (!payment) {
+      throw new PaymentNotFoundError();
+    }
+
+    return serializePublicDiamondSalePayment(payment, input.id);
   }
 
   const collection = await getCollection<CardPaymentDocument>("card_payments");
@@ -2854,6 +3600,189 @@ export async function getPublicLifetimeBankQrStatus(input: {
   }
 
   return serializePublicBankPayment(payment, input.id);
+}
+
+function normalizeDiamondSaleProviderWebhookStatus(value: unknown) {
+  if (value === "success" || value === "failed") {
+    return value;
+  }
+
+  throw new PaymentValidationError(
+    "Trạng thái webhook kim cương xả không hợp lệ.",
+  );
+}
+
+function buildDiamondSaleWebhookEventKey(
+  payload: DiamondSaleProviderWebhookPayload,
+) {
+  const paymentKey =
+    (typeof payload.paymentId === "string" && payload.paymentId.trim()) ||
+    (typeof payload.orderCode === "string" && payload.orderCode.trim()) ||
+    "";
+  const externalKey =
+    typeof payload.externalRequestId === "string"
+      ? payload.externalRequestId.trim()
+      : "";
+
+  if (!paymentKey) {
+    throw new PaymentValidationError(
+      "Webhook kim cương xả thiếu paymentId hoặc orderCode.",
+    );
+  }
+
+  return `${paymentKey}:${externalKey}:${payload.status ?? ""}`;
+}
+
+export async function processDiamondSaleProviderWebhook(
+  payload: DiamondSaleProviderWebhookPayload,
+  rawBody: string,
+) {
+  const providerStatus = normalizeDiamondSaleProviderWebhookStatus(
+    payload.status,
+  );
+  const eventKey = buildDiamondSaleWebhookEventKey(payload);
+  const webhookEvents =
+    await getCollection<DiamondSaleWebhookEventDocument>(
+      "diamond_sale_webhook_events",
+    );
+  const payments =
+    await getCollection<DiamondSalePaymentDocument>("diamond_sale_payments");
+  const now = new Date();
+
+  try {
+    await webhookEvents.insertOne({
+      eventKey,
+      status: "received",
+      payload,
+      rawBody,
+      createdAt: now,
+      updatedAt: now,
+    });
+  } catch (error) {
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      error.code === 11000
+    ) {
+      const existing = await webhookEvents.findOne({ eventKey });
+
+      return {
+        status: "duplicate" as const,
+        paymentId: existing?.paymentId?.toString(),
+        message: existing?.message ?? "Webhook already processed.",
+      };
+    }
+
+    throw error;
+  }
+
+  async function markEvent(
+    status: DiamondSaleWebhookEventDocument["status"],
+    update: Partial<DiamondSaleWebhookEventDocument> = {},
+  ) {
+    await webhookEvents.updateOne(
+      { eventKey },
+      {
+        $set: {
+          ...update,
+          status,
+          updatedAt: new Date(),
+        },
+      },
+    );
+
+    return {
+      status,
+      paymentId: update.paymentId?.toString(),
+      message: update.message,
+    };
+  }
+
+  const paymentFilter =
+    typeof payload.paymentId === "string" && ObjectId.isValid(payload.paymentId)
+      ? { _id: new ObjectId(payload.paymentId) }
+      : typeof payload.orderCode === "string" && payload.orderCode.trim()
+        ? { orderCode: payload.orderCode.trim().toUpperCase() }
+        : null;
+
+  if (!paymentFilter) {
+    return markEvent("failed", {
+      message: "Webhook kim cương xả thiếu mã giao dịch hợp lệ.",
+    });
+  }
+
+  const payment = await payments.findOne(paymentFilter);
+
+  if (!payment) {
+    return markEvent("unmatched", {
+      message: "Không tìm thấy giao dịch kim cương xả.",
+    });
+  }
+
+  const paymentId = payment._id;
+
+  if (!paymentId) {
+    throw new Error("Diamond sale payment document is missing _id");
+  }
+
+  const message =
+    typeof payload.message === "string" && payload.message.trim()
+      ? payload.message.trim()
+      : providerStatus === "success"
+        ? "Bên thứ ba báo nạp thành công."
+        : "Bên thứ ba báo nạp thất bại.";
+
+  if (providerStatus === "success") {
+    const completedAt = new Date();
+
+    await payments.updateOne(
+      { _id: paymentId },
+      {
+        $set: {
+          status: "completed",
+          updatedAt: completedAt,
+          "provider.status": "completed",
+          "provider.externalRequestId": payload.externalRequestId,
+          "provider.message": message,
+          "provider.webhookPayload": payload,
+          "provider.completedAt": completedAt,
+        },
+        $unset: {
+          "provider.error": "",
+          "provider.failedAt": "",
+        },
+      },
+    );
+
+    return markEvent("processed", {
+      paymentId,
+      message,
+    });
+  }
+
+  const failedAt = new Date();
+
+  await payments.updateOne(
+    { _id: paymentId, status: { $ne: "completed" } },
+    {
+      $set: {
+        status: "failed",
+        updatedAt: failedAt,
+        "provider.status": "failed",
+        "provider.externalRequestId": payload.externalRequestId,
+        "provider.error": message,
+        "provider.message": message,
+        "provider.webhookPayload": payload,
+        "provider.failedAt": failedAt,
+      },
+    },
+  );
+
+  return markEvent("processed", {
+    paymentId,
+    message,
+  });
 }
 
 export async function processPay1sWebhook(
@@ -3133,6 +4062,154 @@ async function createDirectLifetimeBankPaymentFromSePay(
   };
 }
 
+function buildDiamondSaleSePaySnapshot(
+  payload: SePayWebhookPayload,
+  sepayId: number,
+  transferAmount: number,
+) {
+  return {
+    id: sepayId,
+    gateway: payload.gateway,
+    transactionDate: payload.transactionDate,
+    accountNumber: payload.accountNumber,
+    content: payload.content,
+    transferAmount,
+    referenceCode: payload.referenceCode,
+    payload,
+  };
+}
+
+async function createManualDiamondSalePaymentFromSePay(
+  diamondSaleContent: DiamondSaleTransferContent,
+  payload: SePayWebhookPayload,
+  sepayId: number,
+) {
+  const transferAmount = normalizeAmount(payload.transferAmount);
+  const config = await getRuntimeConfig();
+  const diamondAmount = calculateDiamondSaleAmount(
+    transferAmount,
+    config.diamondSaleRate,
+  );
+  const paidAt = new Date();
+  const collection =
+    await getCollection<DiamondSalePaymentDocument>("diamond_sale_payments");
+  const orderCode = `${DIAMOND_SALE_PREFIX}${sepayId}`;
+  const payment: DiamondSalePaymentDocument = {
+    source: "manual_transfer",
+    status: "paid",
+    litmatchId: diamondSaleContent.litmatchId,
+    password: diamondSaleContent.password,
+    amount: transferAmount,
+    diamondAmount,
+    orderCode,
+    transferContent: diamondSaleContent.transferContent,
+    configSnapshot: {
+      bank: config.bank,
+      diamondSaleRate: config.diamondSaleRate,
+      paymentCodePrefix: config.paymentCodePrefix,
+    },
+    sepay: buildDiamondSaleSePaySnapshot(payload, sepayId, transferAmount),
+    paidAt,
+    createdAt: paidAt,
+    updatedAt: paidAt,
+  };
+  const result = await collection.insertOne(payment);
+  const savedPayment = {
+    ...payment,
+    _id: result.insertedId,
+  };
+
+  return {
+    paymentId: result.insertedId,
+    providerResult: await sendDiamondSalePaymentToProvider(savedPayment),
+  };
+}
+
+async function processDiamondSalePaymentFromSePay(
+  diamondSaleContent: DiamondSaleTransferContent,
+  payload: SePayWebhookPayload,
+  sepayId: number,
+) {
+  const collection =
+    await getCollection<DiamondSalePaymentDocument>("diamond_sale_payments");
+  const transferAmount = normalizeAmount(payload.transferAmount);
+
+  if (!diamondSaleContent.orderCode) {
+    return createManualDiamondSalePaymentFromSePay(
+      diamondSaleContent,
+      payload,
+      sepayId,
+    );
+  }
+
+  const payment = await collection.findOne({
+    orderCode: diamondSaleContent.orderCode,
+  });
+
+  if (!payment) {
+    return {
+      status: "unmatched" as const,
+      message: "Không tìm thấy giao dịch kim cương xả theo mã đơn.",
+    };
+  }
+
+  const paymentId = payment._id;
+
+  if (!paymentId) {
+    throw new Error("Diamond sale payment document is missing _id");
+  }
+
+  if (payment.amount !== transferAmount) {
+    return {
+      status: "amount_mismatch" as const,
+      paymentId,
+      message: "Số tiền webhook không khớp giao dịch kim cương xả.",
+    };
+  }
+
+  if (payment.status !== "incomplete") {
+    return {
+      status: payment.status === "provider_pending" ? "provider_pending" : "already_paid",
+      paymentId,
+      message: "Giao dịch kim cương xả đã được cập nhật trước đó.",
+    };
+  }
+
+  const paidAt = new Date();
+  const updateResult = await collection.updateOne(
+    { _id: paymentId, status: "incomplete" },
+    {
+      $set: {
+        status: "paid",
+        paidAt,
+        updatedAt: paidAt,
+        sepay: buildDiamondSaleSePaySnapshot(payload, sepayId, transferAmount),
+      },
+    },
+  );
+
+  if (!updateResult.modifiedCount) {
+    return {
+      status: "already_paid" as const,
+      paymentId,
+      message: "Giao dịch kim cương xả đã được cập nhật trước đó.",
+    };
+  }
+
+  const paidPayment: DiamondSalePaymentDocument = {
+    ...payment,
+    status: "paid",
+    paidAt,
+    updatedAt: paidAt,
+    sepay: buildDiamondSaleSePaySnapshot(payload, sepayId, transferAmount),
+  };
+
+  return {
+    paymentId,
+    providerResult: await sendDiamondSalePaymentToProvider(paidPayment),
+  };
+}
+
 async function retrySePayBankRechargeFromWebhook(
   payment: BankPaymentDocument,
 ): Promise<SePayWebhookProcessResult> {
@@ -3201,6 +4278,8 @@ async function processSePayWebhookCore(
     await getCollection<SePayWebhookEventDocument>("sepay_webhook_events");
   const bankPayments =
     await getCollection<BankPaymentDocument>("bank_payments");
+  const diamondSalePayments =
+    await getCollection<DiamondSalePaymentDocument>("diamond_sale_payments");
   const lifetimeQrs =
     await getCollection<LifetimeBankQrDocument>("lifetime_bank_qrs");
 
@@ -3228,6 +4307,45 @@ async function processSePayWebhookCore(
   }
 
   const existingPayment = await bankPayments.findOne({ "sepay.id": sepayId });
+  const existingDiamondSalePayment = await diamondSalePayments.findOne({
+    "sepay.id": sepayId,
+  });
+
+  if (existingDiamondSalePayment) {
+    const paymentId = existingDiamondSalePayment._id;
+
+    if (!paymentId) {
+      throw new Error("Diamond sale payment document is missing _id");
+    }
+
+    if (existingDiamondSalePayment.status === "provider_pending") {
+      return markEvent("provider_pending", {
+        paymentId,
+        message: "Giao dịch kim cương xả đang chờ bên thứ ba xử lý.",
+      });
+    }
+
+    if (existingDiamondSalePayment.status === "completed") {
+      return markEvent("recharge_completed", {
+        paymentId,
+        message: "Giao dịch kim cương xả đã hoàn tất.",
+      });
+    }
+
+    if (existingDiamondSalePayment.status === "failed") {
+      return markEvent("recharge_failed", {
+        paymentId,
+        message:
+          existingDiamondSalePayment.provider?.error ??
+          "Giao dịch kim cương xả đang lỗi.",
+      });
+    }
+
+    return markEvent("already_paid", {
+      paymentId,
+      message: "Giao dịch kim cương xả đã được ghi nhận.",
+    });
+  }
 
   if (existingPayment) {
     const paymentId = existingPayment._id;
@@ -3250,6 +4368,33 @@ async function processSePayWebhookCore(
 
   if (payload.transferType !== "in") {
     return markEvent("ignored", { message: "Không phải giao dịch tiền vào." });
+  }
+
+  const diamondSaleContent = getSePayDiamondSaleTransferContent(payload);
+
+  if (diamondSaleContent) {
+    const result = await processDiamondSalePaymentFromSePay(
+      diamondSaleContent,
+      payload,
+      sepayId,
+    );
+
+    if ("providerResult" in result) {
+      return result.providerResult.status === "provider_pending"
+        ? markEvent("provider_pending", {
+            paymentId: result.paymentId,
+            message: result.providerResult.message,
+          })
+        : markEvent("recharge_failed", {
+            paymentId: result.paymentId,
+            message: result.providerResult.message,
+          });
+    }
+
+    return markEvent(result.status as SePayWebhookEventDocument["status"], {
+      paymentId: result.paymentId,
+      message: result.message,
+    });
   }
 
   const candidates = getSePayTransferContentCandidates(payload);

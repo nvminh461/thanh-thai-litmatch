@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useId, useState } from "react";
 import {
+  calculateDiamondSaleAmount,
   calculateReceiveAmount,
   cardDenominations,
   cardProviders,
@@ -10,6 +11,7 @@ import {
   normalizeLitmatchId,
   packagePrices,
   type BankConfig,
+  type DiamondSaleRateConfig,
   type RateConfig,
   type RewardType,
   type SiteConfig,
@@ -20,13 +22,16 @@ import VerifyIdModal, {
 import styles from "./page.module.css";
 
 type CurrencyType = RewardType;
+type BankTabType = CurrencyType | "diamond-sale";
 type TopUpMode = "bank" | "card";
-type PaymentStatusKind = "bank" | "card" | "lifetime-bank-qr";
+type PaymentStatusKind = "bank" | "card" | "lifetime-bank-qr" | "diamond-sale";
 
 type QrPayment = {
   id: string;
+  type: "bank" | "diamond-sale";
   amount: number;
   content: string;
+  displayContent: string;
   currency: CurrencyType;
   receiveAmount: number;
   qrUrl: string;
@@ -44,8 +49,10 @@ type PaymentStatusValue =
   | "incomplete"
   | "processing"
   | "paid"
+  | "provider_pending"
   | "completed"
-  | "recharge_failed";
+  | "recharge_failed"
+  | "failed";
 
 type BankPaymentResponse = {
   success: boolean;
@@ -55,6 +62,22 @@ type BankPaymentResponse = {
     rewardType: CurrencyType;
     rewardAmount: number;
     transferContent: string;
+    qrUrl: string;
+  };
+  error?: string;
+};
+
+type DiamondSalePaymentResponse = {
+  success: boolean;
+  data?: {
+    id: string;
+    type: "diamond-sale";
+    amount: number;
+    rewardType: "diamond";
+    rewardAmount: number;
+    diamondAmount: number;
+    transferContent: string;
+    maskedTransferContent: string;
     qrUrl: string;
   };
   error?: string;
@@ -98,7 +121,7 @@ type PaymentStatusResponse = {
   success: boolean;
   data?: {
     id: string;
-    type: "bank" | "card";
+    type: "bank" | "card" | "diamond-sale";
     bankMode?: "fixed" | "lifetime";
     status: PaymentStatusValue;
     litmatchId: string;
@@ -173,8 +196,16 @@ function paymentStatusLabel(status: PaymentStatusValue) {
     return "Đã nạp thành công";
   }
 
+  if (status === "failed") {
+    return "Xử lý lỗi";
+  }
+
   if (status === "recharge_failed") {
     return "Đã nhận tiền nhưng nạp lỗi";
+  }
+
+  if (status === "provider_pending") {
+    return "Đã nhận tiền, chờ bên thứ ba xử lý";
   }
 
   if (status === "paid") {
@@ -738,20 +769,24 @@ export default function HomeClient({
   bankConfig,
   bankRateConfig,
   cardRateConfig,
+  diamondSaleRateConfig,
   siteConfig,
 }: {
   bankConfig: BankConfig;
   bankRateConfig: RateConfig;
   cardRateConfig: RateConfig;
+  diamondSaleRateConfig: DiamondSaleRateConfig;
   siteConfig: SiteConfig;
 }) {
   const [topUpMode, setTopUpMode] = useState<TopUpMode>("bank");
   const [currency, setCurrency] = useState<CurrencyType>("diamond");
+  const [bankTab, setBankTab] = useState<BankTabType>("diamond");
   const [paymentAmount, setPaymentAmount] = useState(0);
   const [selectedPackagePrice, setSelectedPackagePrice] = useState<
     number | null
   >(null);
   const [litmatchId, setLitmatchId] = useState("");
+  const [diamondSalePassword, setDiamondSalePassword] = useState("");
   const [cardCurrency, setCardCurrency] = useState<CurrencyType>("diamond");
   const [cardProvider, setCardProvider] = useState(cardProviders[0]);
   const [cardDenomination, setCardDenomination] = useState(50000);
@@ -799,11 +834,10 @@ export default function HomeClient({
     mergedSiteConfig.announcementEnabled &&
     Boolean(announcementText);
   const active = currencyConfig[currency];
-  const receiveAmount = calculateReceiveAmount(
-    paymentAmount,
-    currency,
-    bankRateConfig,
-  );
+  const isDiamondSale = bankTab === "diamond-sale";
+  const receiveAmount = isDiamondSale
+    ? calculateDiamondSaleAmount(paymentAmount, diamondSaleRateConfig)
+    : calculateReceiveAmount(paymentAmount, currency, bankRateConfig);
   const cardActive = currencyConfig[cardCurrency];
   const cardReceiveAmount = calculateReceiveAmount(
     cardDenomination,
@@ -811,7 +845,9 @@ export default function HomeClient({
     cardRateConfig,
   );
   const activeIconClass = `${styles.inlineIcon} ${
-    currency === "star" ? styles.starIcon : styles.diamondIcon
+    !isDiamondSale && currency === "star"
+      ? styles.starIcon
+      : styles.diamondIcon
   }`;
   const cardIconClass = `${styles.inlineIcon} ${
     cardCurrency === "star" ? styles.starIcon : styles.diamondIcon
@@ -885,11 +921,21 @@ export default function HomeClient({
       return;
     }
 
+    if (
+      isDiamondSale &&
+      (!diamondSalePassword.trim() || /\s/.test(diamondSalePassword.trim()))
+    ) {
+      setFormError("Vui lòng nhập mật khẩu không có khoảng trắng.");
+      return;
+    }
+
     setPaymentLoading(true);
     setFormError("");
 
     try {
-      const response = await fetch("/api/payments/bank", {
+      const response = await fetch(
+        isDiamondSale ? "/api/payments/diamond-sale" : "/api/payments/bank",
+        {
         method: "POST",
         headers: {
           "content-type": "application/json",
@@ -897,10 +943,14 @@ export default function HomeClient({
         body: JSON.stringify({
           litmatchId: normalizedId,
           amount: paymentAmount,
-          rewardType: currency,
+          ...(isDiamondSale
+            ? { password: diamondSalePassword.trim() }
+            : { rewardType: currency }),
         }),
       });
-      const payload = (await response.json()) as BankPaymentResponse;
+      const payload = (await response.json()) as
+        | BankPaymentResponse
+        | DiamondSalePaymentResponse;
 
       if (!response.ok || !payload.success || !payload.data) {
         setFormError(payload.error ?? "Không tạo được mã QR.");
@@ -909,8 +959,13 @@ export default function HomeClient({
 
       setQrPayment({
         id: payload.data.id,
+        type: isDiamondSale ? "diamond-sale" : "bank",
         amount: payload.data.amount,
         content: payload.data.transferContent,
+        displayContent:
+          "maskedTransferContent" in payload.data
+            ? payload.data.maskedTransferContent
+            : payload.data.transferContent,
         currency: payload.data.rewardType,
         receiveAmount: payload.data.rewardAmount,
         qrUrl: payload.data.qrUrl,
@@ -1252,7 +1307,9 @@ export default function HomeClient({
       }
 
       const paymentType =
-        payload.data.type === "card"
+        payload.data.type === "diamond-sale"
+          ? "kim cương xả"
+          : payload.data.type === "card"
           ? "nạp thẻ"
           : payload.data.bankMode === "lifetime"
             ? "QR trọn đời"
@@ -1540,7 +1597,7 @@ export default function HomeClient({
                     copied={copiedField === "content"}
                     icon="≡"
                     label="Nội dung chuyển khoản:"
-                    value={qrPayment.content}
+                    value={qrPayment.displayContent}
                     onCopy={() => handleCopy(qrPayment.content, "content")}
                   />
                 </div>
@@ -1556,7 +1613,9 @@ export default function HomeClient({
                   className={styles.statusButton}
                   type="button"
                   disabled={statusLoading}
-                  onClick={() => handleCheckPaymentStatus("bank", qrPayment.id)}
+                  onClick={() =>
+                    handleCheckPaymentStatus(qrPayment.type, qrPayment.id)
+                  }
                 >
                   {statusLoading ? "Đang kiểm tra..." : "Kiểm tra trạng thái"}
                 </button>
@@ -1809,9 +1868,9 @@ export default function HomeClient({
             <div className={`${styles.bankLayout} ${styles.bankLayoutCenter}`}>
               <div
                 className={`${styles.guidedDock} ${styles.bankTopupDock}`}
-                id={`${tabBaseId}-panel-${currency}`}
+                id={`${tabBaseId}-panel-${bankTab}`}
                 role="tabpanel"
-                aria-labelledby={`${tabBaseId}-${currency}`}
+                aria-labelledby={`${tabBaseId}-${bankTab}`}
               >
                 <div className={styles.packageHeader}>
                   <div className={styles.sectionIntro}>
@@ -1829,7 +1888,7 @@ export default function HomeClient({
                     {(Object.keys(currencyConfig) as CurrencyType[]).map(
                       (type) => {
                         const config = currencyConfig[type];
-                        const isActive = currency === type;
+                        const isActive = bankTab === type;
                         const tabId = `${tabBaseId}-${type}`;
                         const panelId = `${tabBaseId}-panel-${type}`;
 
@@ -1847,7 +1906,12 @@ export default function HomeClient({
                             type="button"
                             role="tab"
                             tabIndex={isActive ? 0 : -1}
-                            onClick={() => setCurrency(type)}
+                            onClick={() => {
+                              setBankTab(type);
+                              setCurrency(type);
+                              setFormError("");
+                              setStatusMessage("");
+                            }}
                           >
                             <span
                               className={`${styles.currencyTabIcon}${
@@ -1866,6 +1930,35 @@ export default function HomeClient({
                         );
                       },
                     )}
+                    <button
+                      id={`${tabBaseId}-diamond-sale`}
+                      aria-controls={`${tabBaseId}-panel-diamond-sale`}
+                      aria-label="Nạp kim cương xả"
+                      aria-selected={isDiamondSale}
+                      className={`${styles.currencyIconTab}${
+                        isDiamondSale ? ` ${styles.currencyIconTabActive}` : ""
+                      }`}
+                      title="Nạp kim cương xả"
+                      type="button"
+                      role="tab"
+                      tabIndex={isDiamondSale ? 0 : -1}
+                      onClick={() => {
+                        setBankTab("diamond-sale");
+                        setCurrency("diamond");
+                        setFormError("");
+                        setStatusMessage("");
+                      }}
+                    >
+                      <span
+                        className={styles.currencyTabIcon}
+                        aria-hidden="true"
+                      >
+                        $
+                      </span>
+                      <span className={styles.visuallyHidden}>
+                        Kim cương xả
+                      </span>
+                    </button>
                   </div>
                 </div>
 
@@ -1888,11 +1981,16 @@ export default function HomeClient({
                       >
                         <strong>
                           {formatNumber(
-                            calculateReceiveAmount(
-                              price,
-                              currency,
-                              bankRateConfig,
-                            ),
+                            isDiamondSale
+                              ? calculateDiamondSaleAmount(
+                                  price,
+                                  diamondSaleRateConfig,
+                                )
+                              : calculateReceiveAmount(
+                                  price,
+                                  currency,
+                                  bankRateConfig,
+                                ),
                           )}{" "}
                           <span className={activeIconClass} aria-hidden="true">
                             {active.icon}
@@ -1928,9 +2026,9 @@ export default function HomeClient({
                       <span>
                         Thực nhận{" "}
                         <b>
-                          {active.receiveLabel}{" "}
+                          {isDiamondSale ? "kim cương xả" : active.receiveLabel}{" "}
                           <span className={activeIconClass} aria-hidden="true">
-                            {active.icon}
+                            {isDiamondSale ? "💎" : active.icon}
                           </span>
                         </b>
                       </span>
@@ -1952,6 +2050,23 @@ export default function HomeClient({
                     onVerify={handleVerifyId}
                   />
 
+                  {isDiamondSale ? (
+                    <label className={styles.field}>
+                      <span>Mật khẩu Litmatch</span>
+                      <input
+                        type="password"
+                        autoComplete="current-password"
+                        value={diamondSalePassword}
+                        placeholder="Nhập mật khẩu"
+                        onChange={(event) => {
+                          setDiamondSalePassword(event.target.value);
+                          setFormError("");
+                          setStatusMessage("");
+                        }}
+                      />
+                    </label>
+                  ) : null}
+
                   {formError ? (
                     <p className={styles.formError} role="alert">
                       {formError}
@@ -1964,7 +2079,11 @@ export default function HomeClient({
                       type="submit"
                       disabled={paymentLoading}
                     >
-                      {paymentLoading ? "Đang tạo..." : "Tạo mã QR"}{" "}
+                      {paymentLoading
+                        ? "Đang tạo..."
+                        : isDiamondSale
+                          ? "Tạo QR xả"
+                          : "Tạo mã QR"}{" "}
                       <span aria-hidden="true">⚡</span>
                     </button>
 

@@ -1,5 +1,6 @@
 import type {
   BankConfig,
+  DiamondSaleRateConfig,
   RateConfig,
   RuntimeConfig,
   SiteConfig,
@@ -7,6 +8,8 @@ import type {
 import {
   defaultBankRate,
   defaultCardRate,
+  defaultDiamondSaleRate,
+  normalizeDiamondSaleRateConfig,
   normalizePaymentCodePrefix,
 } from "@/lib/payment-config";
 import { getCollection } from "./mongo";
@@ -40,7 +43,12 @@ type AppSettingDocument<TValue> = {
 
 type PersistedRuntimeConfig = Pick<
   RuntimeConfig,
-  "bank" | "bankRate" | "cardRate" | "site" | "paymentCodePrefix"
+  | "bank"
+  | "bankRate"
+  | "cardRate"
+  | "diamondSaleRate"
+  | "site"
+  | "paymentCodePrefix"
 >;
 
 function nonEmptyString(value: unknown, fallback: string) {
@@ -86,6 +94,7 @@ export function getDefaultRuntimeConfig(): RuntimeConfig {
     bank: DEFAULT_BANK_CONFIG,
     bankRate: defaultBankRate,
     cardRate: defaultCardRate,
+    diamondSaleRate: defaultDiamondSaleRate,
     site: DEFAULT_SITE_CONFIG,
     ...envOnlyConfig,
     paymentCodePrefix:
@@ -102,6 +111,8 @@ export function normalizeRuntimeConfig(
   const bank = value?.bank ?? ({} as Partial<BankConfig>);
   const bankRate = value?.bankRate ?? ({} as Partial<RateConfig>);
   const cardRate = value?.cardRate ?? ({} as Partial<RateConfig>);
+  const diamondSaleRate =
+    value?.diamondSaleRate ?? ({} as Partial<DiamondSaleRateConfig>);
   const site = value?.site ?? ({} as Partial<SiteConfig>);
   const prefix =
     normalizePaymentCodePrefix(value?.paymentCodePrefix ?? "") ||
@@ -132,6 +143,10 @@ export function normalizeRuntimeConfig(
       diamond: positiveNumber(cardRate.diamond, fallback.cardRate.diamond),
       star: positiveNumber(cardRate.star, fallback.cardRate.star),
     },
+    diamondSaleRate: normalizeDiamondSaleRateConfig(
+      diamondSaleRate,
+      fallback.diamondSaleRate,
+    ),
     site: {
       dealerName: nonEmptyString(site.dealerName, fallback.site.dealerName),
       zaloPhone: optionalString(site.zaloPhone, fallback.site.zaloPhone),
@@ -164,6 +179,7 @@ function toPersistedRuntimeConfig(config: RuntimeConfig): PersistedRuntimeConfig
     bank: config.bank,
     bankRate: config.bankRate,
     cardRate: config.cardRate,
+    diamondSaleRate: config.diamondSaleRate,
     site: config.site,
     paymentCodePrefix: config.paymentCodePrefix,
   };
@@ -184,6 +200,7 @@ export async function getRuntimeConfig(): Promise<RuntimeConfig> {
     if (
       !rawConfig.bankRate ||
       !rawConfig.cardRate ||
+      !rawConfig.diamondSaleRate ||
       !rawConfig.site ||
       !("supportGroupUrl" in (rawConfig.site as Record<string, unknown>)) ||
       rawConfig.totp ||

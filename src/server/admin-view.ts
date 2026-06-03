@@ -16,6 +16,8 @@ export function toAdminRuntimeConfigForm(
     cardBaseAmount: config.cardRate.baseAmount,
     cardDiamond: config.cardRate.diamond,
     cardStar: config.cardRate.star,
+    diamondSaleBaseAmount: config.diamondSaleRate.baseAmount,
+    diamondSaleTiers: config.diamondSaleRate.tiers,
     paymentCodePrefix: config.paymentCodePrefix,
     dealerName: config.site.dealerName,
     zaloPhone: config.site.zaloPhone,

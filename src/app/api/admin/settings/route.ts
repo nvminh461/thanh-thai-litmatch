@@ -3,7 +3,9 @@ import { getAdminSession } from "@/server/admin-auth";
 import { toAdminRuntimeConfigForm } from "@/server/admin-view";
 import { getRuntimeConfig, saveRuntimeConfig } from "@/server/runtime-config";
 import {
+  normalizeDiamondSaleRateConfig,
   normalizePaymentCodePrefix,
+  type DiamondSaleRateTier,
   type RuntimeConfig,
 } from "@/lib/payment-config";
 
@@ -21,6 +23,16 @@ function positiveNumber(value: unknown, fieldName: string) {
   const numberValue = typeof value === "number" ? value : Number(value);
 
   if (!Number.isFinite(numberValue) || numberValue <= 0) {
+    throw new Error(`${fieldName} không hợp lệ.`);
+  }
+
+  return numberValue;
+}
+
+function nonNegativeNumber(value: unknown, fieldName: string) {
+  const numberValue = typeof value === "number" ? value : Number(value);
+
+  if (!Number.isFinite(numberValue) || numberValue < 0) {
     throw new Error(`${fieldName} không hợp lệ.`);
   }
 
@@ -59,6 +71,50 @@ function optionalHttpUrl(value: unknown, fieldName: string) {
   } catch {
     throw new Error(`${fieldName} phải là URL http/https hợp lệ.`);
   }
+}
+
+function diamondSaleTiers(value: unknown) {
+  if (!Array.isArray(value)) {
+    throw new Error("Vui lòng cấu hình ít nhất một mốc kim cương xả.");
+  }
+
+  const seenMinAmounts = new Set<number>();
+  const tiers: DiamondSaleRateTier[] = value.map((item, index) => {
+    const row =
+      typeof item === "object" && item !== null
+        ? (item as Record<string, unknown>)
+        : {};
+    const minAmount = nonNegativeNumber(
+      row.minAmount,
+      `Mốc tiền kim cương xả dòng ${index + 1}`,
+    );
+    const diamond = positiveNumber(
+      row.diamond,
+      `Kim cương xả dòng ${index + 1}`,
+    );
+    const normalizedMinAmount = Math.floor(minAmount);
+
+    if (seenMinAmounts.has(normalizedMinAmount)) {
+      throw new Error("Mốc tiền kim cương xả không được trùng nhau.");
+    }
+
+    seenMinAmounts.add(normalizedMinAmount);
+
+    return {
+      minAmount: normalizedMinAmount,
+      diamond,
+    };
+  });
+
+  if (!tiers.length) {
+    throw new Error("Vui lòng cấu hình ít nhất một mốc kim cương xả.");
+  }
+
+  if (!tiers.some((tier) => tier.minAmount === 0)) {
+    tiers.push({ minAmount: 0, diamond: tiers[0].diamond });
+  }
+
+  return tiers.sort((left, right) => left.minAmount - right.minAmount);
 }
 
 export async function POST(request: Request) {
@@ -106,6 +162,13 @@ export async function POST(request: Request) {
         diamond: positiveNumber(body.cardDiamond, "Tỷ lệ kim cương nạp thẻ"),
         star: positiveNumber(body.cardStar, "Tỷ lệ sao nạp thẻ"),
       },
+      diamondSaleRate: normalizeDiamondSaleRateConfig({
+        baseAmount: positiveNumber(
+          body.diamondSaleBaseAmount,
+          "Mốc tiền kim cương xả",
+        ),
+        tiers: diamondSaleTiers(body.diamondSaleTiers),
+      }),
       site: {
         dealerName: requiredString(body.dealerName, "tên đại lý"),
         zaloPhone: contactNumber(body.zaloPhone, "Số Zalo"),

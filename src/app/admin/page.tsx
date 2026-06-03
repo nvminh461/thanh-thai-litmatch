@@ -4,6 +4,7 @@ import { toAdminRuntimeConfigForm } from "@/server/admin-view";
 import {
   getLifetimeQrReport,
   listDirectAdminRecharges,
+  listDiamondSalePayments,
   listBankQrBlacklist,
   listBankPayments,
   listCardPayments,
@@ -26,6 +27,7 @@ export default async function AdminPage() {
     cardPayments,
     lifetimeQrReport,
     directRecharges,
+    diamondSalePayments,
     bankQrBlacklist,
   ] =
     await Promise.all([
@@ -34,6 +36,7 @@ export default async function AdminPage() {
       listCardPayments(),
       getLifetimeQrReport(),
       listDirectAdminRecharges(),
+      listDiamondSalePayments(),
       listBankQrBlacklist(),
     ]);
 
@@ -45,6 +48,7 @@ export default async function AdminPage() {
       cardPayments={cardPayments}
       lifetimeQrReport={lifetimeQrReport}
       directRecharges={directRecharges}
+      diamondSalePayments={diamondSalePayments}
       bankQrBlacklist={bankQrBlacklist}
     />
   );

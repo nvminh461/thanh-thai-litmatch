@@ -7,8 +7,24 @@ export type AdminPaymentStatus =
   | "completed"
   | "recharge_failed";
 
+export type AdminDiamondSalePaymentStatus =
+  | "incomplete"
+  | "paid"
+  | "provider_pending"
+  | "completed"
+  | "failed";
+
+export type AdminDiamondSalePaymentSource =
+  | "frontend_qr"
+  | "manual_transfer";
+
 export type AdminBankPaymentMode = "fixed" | "lifetime";
 export type AdminBankQrBlacklistStatus = "active" | "unblocked";
+
+export type AdminDiamondSaleRateTier = {
+  minAmount: number;
+  diamond: number;
+};
 
 export type AdminRuntimeConfigForm = {
   bankId: string;
@@ -22,6 +38,8 @@ export type AdminRuntimeConfigForm = {
   cardBaseAmount: number;
   cardDiamond: number;
   cardStar: number;
+  diamondSaleBaseAmount: number;
+  diamondSaleTiers: AdminDiamondSaleRateTier[];
   paymentCodePrefix: string;
   dealerName: string;
   zaloPhone: string;
@@ -107,6 +125,44 @@ export type AdminCardPaymentSummary = {
 export type AdminPaginatedCardPayments =
   AdminPaginatedPayments<AdminCardPaymentRow> & {
     summary: AdminCardPaymentSummary;
+  };
+
+export type AdminDiamondSalePaymentRow = {
+  id: string;
+  source: AdminDiamondSalePaymentSource;
+  status: AdminDiamondSalePaymentStatus;
+  litmatchId: string;
+  passwordMasked: string;
+  amount: number;
+  diamondAmount: number;
+  orderCode: string;
+  transferContent: string;
+  sepayId: number | null;
+  sepayAmount: number | null;
+  providerExternalRequestId: string | null;
+  providerMessage: string | null;
+  providerError: string | null;
+  providerRetryCount: number;
+  createdAt: string;
+  updatedAt: string;
+  paidAt: string | null;
+  canRetry: boolean;
+};
+
+export type AdminDiamondSalePaymentSummary = {
+  paymentCount: number;
+  manualTransferCount: number;
+  incompleteCount: number;
+  providerPendingCount: number;
+  completedCount: number;
+  failedCount: number;
+  totalAmount: number;
+  totalDiamondAmount: number;
+};
+
+export type AdminPaginatedDiamondSalePayments =
+  AdminPaginatedPayments<AdminDiamondSalePaymentRow> & {
+    summary: AdminDiamondSalePaymentSummary;
   };
 
 export type AdminPaginatedPayments<TPayment> = {

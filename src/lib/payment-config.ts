@@ -14,6 +14,16 @@ export type RateConfig = {
   star: number;
 };
 
+export type DiamondSaleRateTier = {
+  minAmount: number;
+  diamond: number;
+};
+
+export type DiamondSaleRateConfig = {
+  baseAmount: number;
+  tiers: DiamondSaleRateTier[];
+};
+
 export type TotpRuntimeConfig = {
   secret: string;
   issuer: string | null;
@@ -43,6 +53,7 @@ export type RuntimeConfig = {
   bank: BankConfig;
   bankRate: RateConfig;
   cardRate: RateConfig;
+  diamondSaleRate: DiamondSaleRateConfig;
   site: SiteConfig;
   totp: TotpRuntimeConfig;
   litmatchAgent: LitmatchAgentRuntimeConfig;
@@ -59,6 +70,20 @@ export const defaultCardRate: RateConfig = {
   baseAmount: 1000,
   diamond: 22,
   star: 220,
+};
+
+export const defaultDiamondSaleRate: DiamondSaleRateConfig = {
+  baseAmount: 1000,
+  tiers: [
+    {
+      minAmount: 0,
+      diamond: 38,
+    },
+    {
+      minAmount: 1000000,
+      diamond: 40,
+    },
+  ],
 };
 
 export const packagePrices = [
@@ -85,6 +110,71 @@ export function calculateReceiveAmount(
   return Math.floor(
     (price / rateConfig.baseAmount) * getCurrencyRate(rateConfig, rewardType),
   );
+}
+
+export function normalizeDiamondSaleRateConfig(
+  value: Partial<DiamondSaleRateConfig> | null | undefined,
+  fallback: DiamondSaleRateConfig = defaultDiamondSaleRate,
+): DiamondSaleRateConfig {
+  const baseAmount =
+    typeof value?.baseAmount === "number" &&
+    Number.isFinite(value.baseAmount) &&
+    value.baseAmount > 0
+      ? value.baseAmount
+      : fallback.baseAmount;
+  const rawTiers = Array.isArray(value?.tiers) ? value.tiers : fallback.tiers;
+  const tiers = rawTiers
+    .map((tier) => ({
+      minAmount:
+        typeof tier?.minAmount === "number" &&
+        Number.isFinite(tier.minAmount) &&
+        tier.minAmount >= 0
+          ? Math.floor(tier.minAmount)
+          : -1,
+      diamond:
+        typeof tier?.diamond === "number" &&
+        Number.isFinite(tier.diamond) &&
+        tier.diamond > 0
+          ? tier.diamond
+          : 0,
+    }))
+    .filter((tier) => tier.minAmount >= 0 && tier.diamond > 0)
+    .sort((left, right) => left.minAmount - right.minAmount)
+    .filter(
+      (tier, index, sorted) =>
+        sorted.findIndex((item) => item.minAmount === tier.minAmount) === index,
+    );
+
+  return {
+    baseAmount,
+    tiers: tiers.length ? tiers : fallback.tiers,
+  };
+}
+
+export function getDiamondSaleRateTier(
+  amount: number,
+  rateConfig: DiamondSaleRateConfig,
+) {
+  const normalizedRate = normalizeDiamondSaleRateConfig(rateConfig);
+  let selectedTier = normalizedRate.tiers[0];
+
+  for (const tier of normalizedRate.tiers) {
+    if (amount >= tier.minAmount) {
+      selectedTier = tier;
+    }
+  }
+
+  return selectedTier;
+}
+
+export function calculateDiamondSaleAmount(
+  price: number,
+  rateConfig: DiamondSaleRateConfig,
+) {
+  const normalizedRate = normalizeDiamondSaleRateConfig(rateConfig);
+  const tier = getDiamondSaleRateTier(price, normalizedRate);
+
+  return Math.floor((price / normalizedRate.baseAmount) * tier.diamond);
 }
 
 export function normalizeLitmatchId(value: string) {
