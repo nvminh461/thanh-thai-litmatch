@@ -157,9 +157,9 @@ npm run reset-admin-password -- --username admin --password "new-password"
 
 Admin có các màn:
 
-- Cấu hình hệ thống: VietQR, tỉ lệ chuyển khoản, tỉ lệ nạp thẻ.
+- Cấu hình hệ thống: VietQR, tỉ lệ chuyển khoản, tỉ lệ nạp thẻ, thông tin liên hệ và link GROUP CSKH riêng.
 - Giao dịch chuyển khoản: lọc trạng thái, ID Litmatch, nội dung chuyển khoản, ngày cập nhật, phân biệt QR cố định/QR trọn đời, phân trang 20 giao dịch/trang.
-- Giao dịch nạp thẻ: lọc trạng thái, ID Litmatch, ngày cập nhật, thông tin PAY1S/callback, trạng thái nạp Litmatch, phân trang 20 giao dịch/trang.
+- Giao dịch nạp thẻ: lọc trạng thái, ID Litmatch, ghi chú, ngày cập nhật, thống kê theo bộ lọc, thông tin PAY1S/callback, trạng thái nạp Litmatch, phân trang 20 giao dịch/trang.
 
 Các trạng thái giao dịch:
 
@@ -231,13 +231,15 @@ Với QR chuyển khoản trọn đời, webhook không cần khớp số tiền
 Nội dung QR trọn đời có dạng:
 
 ```text
+LMKC 123456789
+LMSAO 123456789
 LMKC THANHTHAI 123456789
 LMSAO THANHTHAI 123456789
 ```
 
 - `LMKC`: nạp kim cương.
 - `LMSAO`: nạp sao.
-- `THANHTHAI`: mã CTV/đại lý, chỉ dùng chữ/số không dấu.
+- `THANHTHAI`: mã CTV/đại lý tùy chọn, chỉ dùng chữ/số không dấu.
 - `123456789`: ID Litmatch.
 
 Phản hồi webhook:

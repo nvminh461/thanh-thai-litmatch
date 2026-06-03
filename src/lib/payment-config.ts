@@ -32,6 +32,7 @@ export type LitmatchAgentRuntimeConfig = {
 export type SiteConfig = {
   dealerName: string;
   zaloPhone: string;
+  supportGroupUrl: string;
   facebookUrl: string;
   phoneNumber: string;
   announcementEnabled: boolean;

@@ -138,12 +138,16 @@ function parseLifetimeTransferContent(value: string) {
   const parts = normalized.split(" ");
   const rewardType =
     parts[0] === "LMKC" ? "diamond" : parts[0] === "LMSAO" ? "star" : null;
+  const litmatchId =
+    parts.length === 2 ? parts[1] : parts.length === 3 ? parts[2] : "";
+  const hasValidCtvCode =
+    parts.length === 2 || (parts.length === 3 && /^[A-Z0-9]+$/.test(parts[1]));
 
   if (
-    parts.length !== 3 ||
+    (parts.length !== 2 && parts.length !== 3) ||
     !rewardType ||
-    !/^[A-Z0-9]+$/.test(parts[1]) ||
-    !/^\d{5,20}$/.test(parts[2])
+    !hasValidCtvCode ||
+    !/^\d{5,20}$/.test(litmatchId)
   ) {
     return {
       normalized,
@@ -154,7 +158,7 @@ function parseLifetimeTransferContent(value: string) {
 
   return {
     normalized,
-    litmatchId: parts[2],
+    litmatchId,
     rewardType,
     valid: true,
   };
@@ -187,6 +191,7 @@ function paymentStatusLabel(status: PaymentStatusValue) {
 const defaultSiteConfig: SiteConfig = {
   dealerName: "Đại lý Thành Thái",
   zaloPhone: "",
+  supportGroupUrl: "",
   facebookUrl: "",
   phoneNumber: "",
   announcementEnabled: false,
@@ -210,6 +215,10 @@ function getPhoneUrl(siteConfig: SiteConfig) {
   const phoneNumber = siteConfig.phoneNumber.trim();
 
   return phoneNumber ? `tel:${phoneNumber}` : "";
+}
+
+function getSupportGroupUrl(siteConfig: SiteConfig) {
+  return siteConfig.supportGroupUrl.trim();
 }
 
 function getContactLinks(siteConfig: SiteConfig) {
@@ -624,8 +633,8 @@ function LifetimeBankQrModal({
                 aria-label="Nội dung chuyển khoản QR trọn đời"
                 placeholder={
                   currency === "diamond"
-                    ? "LMKC THANHTHAI 123456789"
-                    : "LMSAO THANHTHAI 123456789"
+                    ? "LMKC 123456789"
+                    : "LMSAO 123456789"
                 }
                 value={lifetimeTransferContent}
                 onChange={(event) =>
@@ -636,14 +645,14 @@ function LifetimeBankQrModal({
 
             <div className={styles.lifetimeGuide}>
               <strong>
-                Format bắt buộc: LMKC TENCTV IDLITMATCH hoặc LMSAO TENCTV
-                IDLITMATCH
+                Format: LMKC IDLITMATCH hoặc LMSAO IDLITMATCH. Có thể thêm
+                TENCTV ở giữa.
               </strong>
               <span>
-                Ví dụ: LMKC THANHTHAI 123456789 để nạp kim cương, LMSAO
-                THANHTHAI 123456789 để nạp sao. Tên CTV chỉ dùng chữ/số không
-                dấu, không khoảng trắng. Hệ thống sẽ lấy ID ở cuối nội dung để
-                kiểm tra và tự nạp khi tiền về.
+                Ví dụ: LMKC 123456789 để nạp kim cương, LMSAO 123456789 để nạp
+                sao. Nếu có cộng tác viên, nhập LMKC THANHTHAI 123456789. Tên
+                CTV chỉ dùng chữ/số không dấu, không khoảng trắng. Hệ thống sẽ
+                lấy ID ở cuối nội dung để kiểm tra và tự nạp khi tiền về.
               </span>
             </div>
 
@@ -783,7 +792,7 @@ export default function HomeClient({
   };
   const dealerName = getDealerName(mergedSiteConfig);
   const contactLinks = getContactLinks(mergedSiteConfig);
-  const zaloUrl = getZaloUrl(mergedSiteConfig);
+  const supportGroupUrl = getSupportGroupUrl(mergedSiteConfig);
   const announcementText = mergedSiteConfig.announcementText.trim();
   const shouldShowAnnouncement =
     showAnnouncement &&
@@ -1013,8 +1022,13 @@ export default function HomeClient({
         return getLifetimeTransferContentPrefix(value);
       }
 
-      const [, ctvCode, litmatchTargetId] = parsed.normalized.split(" ");
-      return `${getLifetimeTransferContentPrefix(value)}${ctvCode} ${litmatchTargetId}`;
+      const parts = parsed.normalized.split(" ");
+
+      if (parts.length === 2) {
+        return `${getLifetimeTransferContentPrefix(value)}${parts[1]}`;
+      }
+
+      return `${getLifetimeTransferContentPrefix(value)}${parts[1]} ${parts[2]}`;
     });
     setVerifiedLitmatchId(null);
     setVerifyError("");
@@ -1033,7 +1047,7 @@ export default function HomeClient({
 
     if (!parsedContent.valid) {
       setLifetimeQrError(
-        "Nội dung QR trọn đời phải có dạng LMKC TENCTV IDLITMATCH hoặc LMSAO TENCTV IDLITMATCH.",
+        "Nội dung QR trọn đời phải có dạng LMKC IDLITMATCH, LMSAO IDLITMATCH hoặc thêm TENCTV ở giữa.",
       );
       return;
     }
@@ -1177,7 +1191,7 @@ export default function HomeClient({
     if (!normalizedId) {
       setVerifyError(
         showLifetimeQrModal
-          ? "Vui lòng nhập nội dung đúng dạng LMKC TENCTV IDLITMATCH hoặc LMSAO TENCTV IDLITMATCH."
+          ? "Vui lòng nhập nội dung đúng dạng LMKC IDLITMATCH, LMSAO IDLITMATCH hoặc thêm TENCTV ở giữa."
           : "Vui lòng nhập ID Litmatch.",
       );
       return;
@@ -1976,10 +1990,10 @@ export default function HomeClient({
                       QR trọn đời
                     </button>
 
-                    {zaloUrl ? (
+                    {supportGroupUrl ? (
                       <a
                         className={styles.pillLink}
-                        href={zaloUrl}
+                        href={supportGroupUrl}
                         target="_blank"
                         rel="noopener noreferrer"
                       >

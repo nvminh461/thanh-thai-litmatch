@@ -109,6 +109,10 @@ export async function POST(request: Request) {
       site: {
         dealerName: requiredString(body.dealerName, "tên đại lý"),
         zaloPhone: contactNumber(body.zaloPhone, "Số Zalo"),
+        supportGroupUrl: optionalHttpUrl(
+          body.supportGroupUrl,
+          "Link GROUP CSKH",
+        ),
         facebookUrl: optionalHttpUrl(body.facebookUrl, "URL Facebook"),
         phoneNumber: contactNumber(body.phoneNumber, "Số điện thoại"),
         announcementEnabled: Boolean(body.announcementEnabled),

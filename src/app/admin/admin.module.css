@@ -569,6 +569,12 @@
   padding: 0 10px;
 }
 
+.inlineActions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 .inlineActionButton:hover,
 .inlineActionButton:focus-visible {
   border-color: #1f6feb;

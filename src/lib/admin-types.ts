@@ -25,6 +25,7 @@ export type AdminRuntimeConfigForm = {
   paymentCodePrefix: string;
   dealerName: string;
   zaloPhone: string;
+  supportGroupUrl: string;
   facebookUrl: string;
   phoneNumber: string;
   announcementEnabled: boolean;
@@ -53,6 +54,16 @@ export type AdminBankPaymentRow = {
   canRetryRecharge: boolean;
 };
 
+export type AdminBankPaymentSummary = {
+  paymentCount: number;
+  completedCount: number;
+  rechargeFailedCount: number;
+  totalAmount: number;
+  totalRewardAmount: number;
+  diamondRewardAmount: number;
+  starRewardAmount: number;
+};
+
 export type AdminCardPaymentRow = {
   id: string;
   status: AdminPaymentStatus;
@@ -77,9 +88,26 @@ export type AdminCardPaymentRow = {
   rechargeError: string | null;
   rechargeCompletedAt: string | null;
   canRetryRecharge: boolean;
+  note: string | null;
   createdAt: string;
   updatedAt: string;
 };
+
+export type AdminCardPaymentSummary = {
+  paymentCount: number;
+  completedCount: number;
+  rechargeFailedCount: number;
+  totalDeclaredAmount: number;
+  totalActualAmount: number;
+  totalRewardAmount: number;
+  diamondRewardAmount: number;
+  starRewardAmount: number;
+};
+
+export type AdminPaginatedCardPayments =
+  AdminPaginatedPayments<AdminCardPaymentRow> & {
+    summary: AdminCardPaymentSummary;
+  };
 
 export type AdminPaginatedPayments<TPayment> = {
   rows: TPayment[];
@@ -87,7 +115,13 @@ export type AdminPaginatedPayments<TPayment> = {
   page: number;
   pageSize: number;
   totalPages: number;
+  summary?: unknown;
 };
+
+export type AdminPaginatedBankPayments =
+  AdminPaginatedPayments<AdminBankPaymentRow> & {
+    summary: AdminBankPaymentSummary;
+  };
 
 export type AdminBankQrBlacklistRow = {
   id: string;
@@ -174,6 +208,20 @@ export type AdminDirectRechargeRow = {
   createdAt: string;
   updatedAt: string;
 };
+
+export type AdminDirectRechargeSummary = {
+  rechargeCount: number;
+  completedCount: number;
+  failedCount: number;
+  totalRewardAmount: number;
+  diamondRewardAmount: number;
+  starRewardAmount: number;
+};
+
+export type AdminPaginatedDirectRecharges =
+  AdminPaginatedPayments<AdminDirectRechargeRow> & {
+    summary: AdminDirectRechargeSummary;
+  };
 
 export type AdminRechargeResult = {
   status: "completed" | "failed";

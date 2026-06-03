@@ -1,16 +1,22 @@
 import { randomInt } from "node:crypto";
-import { ObjectId, type Filter } from "mongodb";
+import { ObjectId, type Filter, type UpdateFilter } from "mongodb";
 import type {
   AdminBankPaymentMode,
   AdminBankQrBlacklistRow,
   AdminBankQrBlacklistStatus,
   AdminBankPaymentRow,
+  AdminBankPaymentSummary,
   AdminCardPaymentRow,
+  AdminCardPaymentSummary,
+  AdminPaginatedBankPayments,
   AdminPaginatedBankQrBlacklist,
+  AdminPaginatedCardPayments,
   AdminDirectRechargeRow,
+  AdminDirectRechargeSummary,
   AdminLifetimeQrExportResult,
   AdminLifetimeQrReport,
   AdminLifetimeQrReportRow,
+  AdminPaginatedDirectRecharges,
   AdminPaymentStatus,
   AdminPaginatedPayments,
   AdminRechargePreview,
@@ -197,6 +203,7 @@ export type CardPaymentDocument = {
   providerRequest?: Pay1sChargingRequest;
   providerResponse?: Pay1sChargingResponse;
   providerCallback?: Pay1sCallbackPayload;
+  note?: string;
   recharge?: {
     targetUid: string;
     transferType: TransferAssetType;
@@ -327,6 +334,7 @@ export type PaymentListInput = {
   status?: PaymentStatus | "all";
   litmatchId?: string;
   transferContent?: string;
+  note?: string;
   updatedFrom?: string;
   updatedTo?: string;
 };
@@ -335,6 +343,16 @@ export type LifetimeQrReportInput = {
   status?: PaymentStatus | "all";
   litmatchId?: string;
   transferContent?: string;
+  updatedFrom?: string;
+  updatedTo?: string;
+};
+
+export type DirectRechargeListInput = {
+  page?: number;
+  pageSize?: number;
+  status?: AdminDirectRechargeDocument["status"] | "all";
+  litmatchId?: string;
+  note?: string;
   updatedFrom?: string;
   updatedTo?: string;
 };
@@ -440,21 +458,25 @@ function normalizeLifetimeQrTransferContent(value: unknown) {
       : parts[0] === LIFETIME_QR_STAR_PREFIX
         ? "star"
         : null;
+  const litmatchId =
+    parts.length === 2 ? parts[1] : parts.length === 3 ? parts[2] : "";
+  const hasValidCtvCode =
+    parts.length === 2 || (parts.length === 3 && /^[A-Z0-9]+$/.test(parts[1]));
 
   if (
-    parts.length !== 3 ||
+    (parts.length !== 2 && parts.length !== 3) ||
     !rewardType ||
-    !/^[A-Z0-9]+$/.test(parts[1]) ||
-    !/^\d{5,20}$/.test(parts[2])
+    !hasValidCtvCode ||
+    !/^\d{5,20}$/.test(litmatchId)
   ) {
     throw new PaymentValidationError(
-      "Nội dung QR trọn đời phải có dạng LMKC TENCTV IDLITMATCH hoặc LMSAO TENCTV IDLITMATCH. ID Litmatch cần 5-20 số, tên CTV chỉ gồm chữ/số không dấu.",
+      "Nội dung QR trọn đời phải có dạng LMKC IDLITMATCH, LMSAO IDLITMATCH hoặc thêm TENCTV ở giữa. ID Litmatch cần 5-20 số, tên CTV chỉ gồm chữ/số không dấu.",
     );
   }
 
   return {
     transferContent: normalized,
-    litmatchId: normalizePaymentLitmatchId(parts[2]),
+    litmatchId: normalizePaymentLitmatchId(litmatchId),
     rewardType,
   };
 }
@@ -626,6 +648,7 @@ function serializeCardPayment(payment: CardPaymentDocument): AdminCardPaymentRow
     rechargeError: payment.recharge?.error ?? null,
     rechargeCompletedAt: serializeDate(payment.recharge?.completedAt),
     canRetryRecharge: canRetryCardRecharge(payment),
+    note: payment.note ?? null,
     createdAt: payment.createdAt.toISOString(),
     updatedAt: payment.updatedAt.toISOString(),
   };
@@ -670,7 +693,7 @@ function extractLifetimeQrContentCandidate(content: string) {
   // Bank notify text often glues sub-account digits directly before LMSAO/LMKC,
   // so a leading word boundary would miss valid lifetime QR content.
   const match = normalized.match(
-    /(?:LMKC|LMSAO)\s+[A-Z0-9]+\s+\d{5,20}(?!\d)/,
+    /(?:LMKC|LMSAO)(?:\s+[A-Z0-9]+)?\s+\d{5,20}(?!\d)/,
   );
 
   if (!match) {
@@ -688,8 +711,16 @@ function getSePayLifetimeQrContentCandidate(payload: SePayWebhookPayload) {
   const payloadCode =
     typeof payload.code === "string" ? payload.code.trim() : "";
 
+  if (payloadCode) {
+    try {
+      return normalizeLifetimeQrTransferContent(payloadCode);
+    } catch {
+      // Continue with bank notification text; it can contain the transfer
+      // content inside a longer description.
+    }
+  }
+
   return (
-    extractLifetimeQrContentCandidate(payloadCode) ??
     extractLifetimeQrContentCandidate(payload.content ?? "") ??
     extractLifetimeQrContentCandidate(payload.description ?? "")
   );
@@ -724,6 +755,30 @@ function normalizeDirectRechargeNote(value: unknown) {
 
   const note = String(value).trim().replace(/\s+/g, " ");
   return note ? note.slice(0, 500) : undefined;
+}
+
+function normalizeEditableBankTransferContent(value: unknown) {
+  const rawValue = typeof value === "string" ? value : "";
+
+  if (/[\x00-\x1F\x7F]/.test(rawValue)) {
+    throw new PaymentValidationError(
+      "Nội dung chuyển khoản không được chứa ký tự điều khiển.",
+    );
+  }
+
+  const transferContent = rawValue.trim().replace(/\s+/g, " ").toUpperCase();
+
+  if (!transferContent) {
+    throw new PaymentValidationError("Vui lòng nhập nội dung chuyển khoản.");
+  }
+
+  if (transferContent.length > 120) {
+    throw new PaymentValidationError(
+      "Nội dung chuyển khoản không được vượt quá 120 ký tự.",
+    );
+  }
+
+  return transferContent;
 }
 
 function serializeDirectRecharge(
@@ -1208,6 +1263,76 @@ function buildBankPaymentFilter(input: PaymentListInput) {
   return filter;
 }
 
+function addNoteFilter<TDocument>(filter: Filter<TDocument>, note?: string) {
+  const noteTokens =
+    note
+      ?.trim()
+      .split(/\s+/)
+      .filter(Boolean) ?? [];
+
+  if (noteTokens.length === 1) {
+    Object.assign(filter, {
+      note: {
+        $regex: escapeRegex(noteTokens[0]),
+        $options: "i",
+      },
+    });
+  }
+
+  if (noteTokens.length > 1) {
+    Object.assign(filter, {
+      $and: noteTokens.map((token) => ({
+        note: {
+          $regex: escapeRegex(token),
+          $options: "i",
+        },
+      })),
+    });
+  }
+}
+
+function buildCardPaymentFilter(input: PaymentListInput) {
+  const filter = buildCommonPaymentFilter<CardPaymentDocument>(input);
+
+  addNoteFilter(filter, input.note);
+
+  return filter;
+}
+
+function buildDirectRechargeFilter(input: DirectRechargeListInput) {
+  const filter: Filter<AdminDirectRechargeDocument> = {};
+
+  if (
+    input.status === "pending" ||
+    input.status === "completed" ||
+    input.status === "failed"
+  ) {
+    Object.assign(filter, { status: input.status });
+  }
+
+  const litmatchId = input.litmatchId?.replace(/\D/g, "");
+
+  if (litmatchId) {
+    Object.assign(filter, { litmatchId: { $regex: escapeRegex(litmatchId) } });
+  }
+
+  addNoteFilter(filter, input.note);
+
+  const updatedFrom = parseVietnamDayStart(input.updatedFrom);
+  const updatedTo = parseVietnamDayEndExclusive(input.updatedTo);
+
+  if (updatedFrom || updatedTo) {
+    Object.assign(filter, {
+      updatedAt: {
+        ...(updatedFrom ? { $gte: updatedFrom } : {}),
+        ...(updatedTo ? { $lt: updatedTo } : {}),
+      },
+    });
+  }
+
+  return filter;
+}
+
 function buildLifetimeQrPaymentFilter(input: LifetimeQrReportInput) {
   const filter = {
     ...buildBankPaymentFilter(input),
@@ -1254,7 +1379,10 @@ async function paginatePayments<TDocument extends { updatedAt: Date }, TRow>({
 }: {
   collectionName: string;
   filter: Filter<TDocument>;
-  input: PaymentListInput;
+  input: {
+    page?: number;
+    pageSize?: number;
+  };
   serialize: (payment: TDocument) => TRow;
 }): Promise<AdminPaginatedPayments<TRow>> {
   const page = normalizeListPage(input.page);
@@ -1277,6 +1405,151 @@ async function paginatePayments<TDocument extends { updatedAt: Date }, TRow>({
     pageSize,
     totalPages,
   };
+}
+
+const emptyBankPaymentSummary: AdminBankPaymentSummary = {
+  paymentCount: 0,
+  completedCount: 0,
+  rechargeFailedCount: 0,
+  totalAmount: 0,
+  totalRewardAmount: 0,
+  diamondRewardAmount: 0,
+  starRewardAmount: 0,
+};
+
+async function summarizeBankPayments(filter: Filter<BankPaymentDocument>) {
+  const collection = await getCollection<BankPaymentDocument>("bank_payments");
+  const [summary] = await collection
+    .aggregate<AdminBankPaymentSummary>([
+      { $match: filter },
+      {
+        $group: {
+          _id: null,
+          paymentCount: { $sum: 1 },
+          completedCount: {
+            $sum: { $cond: [{ $eq: ["$status", "completed"] }, 1, 0] },
+          },
+          rechargeFailedCount: {
+            $sum: { $cond: [{ $eq: ["$status", "recharge_failed"] }, 1, 0] },
+          },
+          totalAmount: { $sum: "$amount" },
+          totalRewardAmount: { $sum: "$rewardAmount" },
+          diamondRewardAmount: {
+            $sum: {
+              $cond: [{ $eq: ["$rewardType", "diamond"] }, "$rewardAmount", 0],
+            },
+          },
+          starRewardAmount: {
+            $sum: {
+              $cond: [{ $eq: ["$rewardType", "star"] }, "$rewardAmount", 0],
+            },
+          },
+        },
+      },
+      { $project: { _id: 0 } },
+    ])
+    .toArray();
+
+  return summary ?? emptyBankPaymentSummary;
+}
+
+const emptyCardPaymentSummary: AdminCardPaymentSummary = {
+  paymentCount: 0,
+  completedCount: 0,
+  rechargeFailedCount: 0,
+  totalDeclaredAmount: 0,
+  totalActualAmount: 0,
+  totalRewardAmount: 0,
+  diamondRewardAmount: 0,
+  starRewardAmount: 0,
+};
+
+async function summarizeCardPayments(filter: Filter<CardPaymentDocument>) {
+  const collection = await getCollection<CardPaymentDocument>("card_payments");
+  const [summary] = await collection
+    .aggregate<AdminCardPaymentSummary>([
+      { $match: filter },
+      {
+        $group: {
+          _id: null,
+          paymentCount: { $sum: 1 },
+          completedCount: {
+            $sum: { $cond: [{ $eq: ["$status", "completed"] }, 1, 0] },
+          },
+          rechargeFailedCount: {
+            $sum: { $cond: [{ $eq: ["$status", "recharge_failed"] }, 1, 0] },
+          },
+          totalDeclaredAmount: {
+            $sum: { $ifNull: ["$declaredValue", "$cardDenomination"] },
+          },
+          totalActualAmount: {
+            $sum: { $ifNull: ["$actualValue", 0] },
+          },
+          totalRewardAmount: { $sum: "$rewardAmount" },
+          diamondRewardAmount: {
+            $sum: {
+              $cond: [{ $eq: ["$rewardType", "diamond"] }, "$rewardAmount", 0],
+            },
+          },
+          starRewardAmount: {
+            $sum: {
+              $cond: [{ $eq: ["$rewardType", "star"] }, "$rewardAmount", 0],
+            },
+          },
+        },
+      },
+      { $project: { _id: 0 } },
+    ])
+    .toArray();
+
+  return summary ?? emptyCardPaymentSummary;
+}
+
+const emptyDirectRechargeSummary: AdminDirectRechargeSummary = {
+  rechargeCount: 0,
+  completedCount: 0,
+  failedCount: 0,
+  totalRewardAmount: 0,
+  diamondRewardAmount: 0,
+  starRewardAmount: 0,
+};
+
+async function summarizeDirectRecharges(
+  filter: Filter<AdminDirectRechargeDocument>,
+) {
+  const collection =
+    await getCollection<AdminDirectRechargeDocument>("admin_direct_recharges");
+  const [summary] = await collection
+    .aggregate<AdminDirectRechargeSummary>([
+      { $match: filter },
+      {
+        $group: {
+          _id: null,
+          rechargeCount: { $sum: 1 },
+          completedCount: {
+            $sum: { $cond: [{ $eq: ["$status", "completed"] }, 1, 0] },
+          },
+          failedCount: {
+            $sum: { $cond: [{ $eq: ["$status", "failed"] }, 1, 0] },
+          },
+          totalRewardAmount: { $sum: "$rewardAmount" },
+          diamondRewardAmount: {
+            $sum: {
+              $cond: [{ $eq: ["$rewardType", "diamond"] }, "$rewardAmount", 0],
+            },
+          },
+          starRewardAmount: {
+            $sum: {
+              $cond: [{ $eq: ["$rewardType", "star"] }, "$rewardAmount", 0],
+            },
+          },
+        },
+      },
+      { $project: { _id: 0 } },
+    ])
+    .toArray();
+
+  return summary ?? emptyDirectRechargeSummary;
 }
 
 async function assertBankQrCreationAllowed(litmatchId: string) {
@@ -1702,22 +1975,130 @@ export async function createCardPayment(input: {
   throw new Error("Could not generate a unique card request id");
 }
 
-export async function listBankPayments(input: PaymentListInput = {}) {
-  return paginatePayments<BankPaymentDocument, AdminBankPaymentRow>({
+export async function listBankPayments(
+  input: PaymentListInput = {},
+): Promise<AdminPaginatedBankPayments> {
+  const filter = buildBankPaymentFilter(input);
+  const page = await paginatePayments<BankPaymentDocument, AdminBankPaymentRow>({
     collectionName: "bank_payments",
-    filter: buildBankPaymentFilter(input),
+    filter,
     input,
     serialize: serializeBankPayment,
   });
+
+  return {
+    ...page,
+    summary: await summarizeBankPayments(filter),
+  };
 }
 
-export async function listCardPayments(input: PaymentListInput = {}) {
-  return paginatePayments<CardPaymentDocument, AdminCardPaymentRow>({
+export async function listCardPayments(
+  input: PaymentListInput = {},
+): Promise<AdminPaginatedCardPayments> {
+  const filter = buildCardPaymentFilter(input);
+  const page = await paginatePayments<CardPaymentDocument, AdminCardPaymentRow>({
     collectionName: "card_payments",
-    filter: buildCommonPaymentFilter<CardPaymentDocument>(input),
+    filter,
     input,
     serialize: serializeCardPayment,
   });
+
+  return {
+    ...page,
+    summary: await summarizeCardPayments(filter),
+  };
+}
+
+export async function updateBankPaymentTransferContent(input: {
+  paymentId?: unknown;
+  transferContent?: unknown;
+}): Promise<AdminBankPaymentRow> {
+  if (typeof input.paymentId !== "string") {
+    throw new PaymentNotFoundError();
+  }
+
+  const paymentId = normalizePaymentObjectId(input.paymentId);
+  const transferContent = normalizeEditableBankTransferContent(
+    input.transferContent,
+  );
+  const bankPayments = await getCollection<BankPaymentDocument>("bank_payments");
+  const payment = await bankPayments.findOne({ _id: paymentId });
+
+  if (!payment) {
+    throw new PaymentNotFoundError();
+  }
+
+  if (!payment.paidAt && !payment.sepay) {
+    throw new PaymentValidationError(
+      "Chỉ được sửa nội dung chuyển khoản của giao dịch đã nhận tiền.",
+    );
+  }
+
+  if (payment.transferContent === transferContent) {
+    return serializeBankPayment(payment);
+  }
+
+  const lifetimeQrs =
+    await getCollection<LifetimeBankQrDocument>("lifetime_bank_qrs");
+  const duplicateLifetimeQr = await lifetimeQrs.findOne({ transferContent });
+
+  if (duplicateLifetimeQr) {
+    throw new PaymentValidationError(
+      "Nội dung chuyển khoản này đang thuộc QR trọn đời. Vui lòng nhập nội dung khác.",
+    );
+  }
+
+  const updatedAt = new Date();
+  const updatedPayment = await bankPayments.findOneAndUpdate(
+    { _id: paymentId },
+    {
+      $set: {
+        transferContent,
+        updatedAt,
+      },
+    },
+    { returnDocument: "after" },
+  );
+
+  if (!updatedPayment) {
+    throw new PaymentNotFoundError();
+  }
+
+  return serializeBankPayment(updatedPayment);
+}
+
+export async function updateCardPaymentNote(input: {
+  paymentId?: unknown;
+  note?: unknown;
+}): Promise<AdminCardPaymentRow> {
+  if (typeof input.paymentId !== "string") {
+    throw new PaymentNotFoundError();
+  }
+
+  const paymentId = normalizePaymentObjectId(input.paymentId);
+  const note = normalizeDirectRechargeNote(input.note);
+  const cardPayments = await getCollection<CardPaymentDocument>("card_payments");
+  const updatedAt = new Date();
+  const update: UpdateFilter<CardPaymentDocument> =
+    note === undefined
+      ? {
+          $set: { updatedAt },
+          $unset: { note: "" },
+        }
+      : {
+          $set: { note, updatedAt },
+        };
+  const updatedPayment = await cardPayments.findOneAndUpdate(
+    { _id: paymentId },
+    update,
+    { returnDocument: "after" },
+  );
+
+  if (!updatedPayment) {
+    throw new PaymentNotFoundError();
+  }
+
+  return serializeCardPayment(updatedPayment);
 }
 
 export async function listBankQrBlacklist(
@@ -2152,19 +2533,59 @@ export async function createDirectAdminRecharge(input: {
   }
 }
 
-export async function listDirectAdminRecharges(input: {
-  page?: number;
-  pageSize?: number;
-} = {}) {
-  return paginatePayments<AdminDirectRechargeDocument, AdminDirectRechargeRow>({
+export async function listDirectAdminRecharges(
+  input: DirectRechargeListInput = {},
+): Promise<AdminPaginatedDirectRecharges> {
+  const filter = buildDirectRechargeFilter(input);
+  const page = await paginatePayments<
+    AdminDirectRechargeDocument,
+    AdminDirectRechargeRow
+  >({
     collectionName: "admin_direct_recharges",
-    filter: {},
-    input: {
-      page: input.page,
-      pageSize: input.pageSize,
-    },
+    filter,
+    input,
     serialize: serializeDirectRecharge,
   });
+
+  return {
+    ...page,
+    summary: await summarizeDirectRecharges(filter),
+  };
+}
+
+export async function updateDirectAdminRechargeNote(input: {
+  id?: unknown;
+  note?: unknown;
+}): Promise<AdminDirectRechargeRow> {
+  if (typeof input.id !== "string") {
+    throw new PaymentNotFoundError();
+  }
+
+  const rechargeId = normalizePaymentObjectId(input.id);
+  const note = normalizeDirectRechargeNote(input.note);
+  const collection =
+    await getCollection<AdminDirectRechargeDocument>("admin_direct_recharges");
+  const updatedAt = new Date();
+  const update: UpdateFilter<AdminDirectRechargeDocument> =
+    note === undefined
+      ? {
+          $set: { updatedAt },
+          $unset: { note: "" },
+        }
+      : {
+          $set: { note, updatedAt },
+        };
+  const updatedRecharge = await collection.findOneAndUpdate(
+    { _id: rechargeId },
+    update,
+    { returnDocument: "after" },
+  );
+
+  if (!updatedRecharge) {
+    throw new PaymentNotFoundError();
+  }
+
+  return serializeDirectRecharge(updatedRecharge);
 }
 
 export async function getLifetimeQrReport(
@@ -2354,7 +2775,7 @@ export async function deleteIncompleteCardPayments(
 ): Promise<DeleteIncompletePaymentsResult> {
   const collection = await getCollection<CardPaymentDocument>("card_payments");
   const result = await collection.deleteMany(
-    buildCommonPaymentFilter<CardPaymentDocument>({
+    buildCardPaymentFilter({
       ...input,
       status: "incomplete",
     }),

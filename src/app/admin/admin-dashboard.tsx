@@ -2,10 +2,13 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type {
+  AdminPaginatedBankPayments,
+  AdminPaginatedDirectRecharges,
   AdminBankPaymentRow,
   AdminBankQrBlacklistRow,
   AdminBankQrBlacklistStatus,
   AdminCardPaymentRow,
+  AdminPaginatedCardPayments,
   AdminDirectRechargeRow,
   AdminLifetimeQrExportResult,
   AdminLifetimeQrReport,
@@ -22,10 +25,10 @@ import styles from "./admin.module.css";
 type AdminDashboardProps = {
   username: string;
   initialConfig: AdminRuntimeConfigForm;
-  bankPayments: AdminPaginatedPayments<AdminBankPaymentRow>;
-  cardPayments: AdminPaginatedPayments<AdminCardPaymentRow>;
+  bankPayments: AdminPaginatedBankPayments;
+  cardPayments: AdminPaginatedCardPayments;
   lifetimeQrReport: AdminLifetimeQrReport;
-  directRecharges: AdminPaginatedPayments<AdminDirectRechargeRow>;
+  directRecharges: AdminPaginatedDirectRecharges;
   bankQrBlacklist: AdminPaginatedPayments<AdminBankQrBlacklistRow>;
 };
 
@@ -60,6 +63,7 @@ type AdminSection =
   | "report"
   | "settings";
 type StatusFilter = "all" | AdminPaymentStatus;
+type DirectStatusFilter = "all" | AdminDirectRechargeRow["status"];
 type BlacklistStatusFilter = "all" | AdminBankQrBlacklistStatus;
 type PaymentKind = "bank" | "card";
 type BankFilterState = {
@@ -72,6 +76,7 @@ type BankFilterState = {
 type CardFilterState = {
   status: StatusFilter;
   litmatchId: string;
+  note: string;
   updatedFrom: string;
   updatedTo: string;
 };
@@ -79,10 +84,17 @@ type BlacklistFilterState = {
   status: BlacklistStatusFilter;
   litmatchId: string;
 };
+type DirectFilterState = {
+  status: DirectStatusFilter;
+  litmatchId: string;
+  note: string;
+  updatedFrom: string;
+  updatedTo: string;
+};
 
-type PaymentsResponse<TPayment> = {
+type PaymentsResponse<TData> = {
   success: boolean;
-  data?: AdminPaginatedPayments<TPayment>;
+  data?: TData;
   error?: string;
 };
 
@@ -124,11 +136,50 @@ type RechargeResultResponse = {
   error?: string;
 };
 
+type BankPaymentUpdateResponse = {
+  success: boolean;
+  data?: AdminBankPaymentRow;
+  error?: string;
+};
+
+type DirectRechargeUpdateResponse = {
+  success: boolean;
+  data?: AdminDirectRechargeRow;
+  error?: string;
+};
+
+type CardPaymentUpdateResponse = {
+  success: boolean;
+  data?: AdminCardPaymentRow;
+  error?: string;
+};
+
 type DirectRechargeFormState = {
   litmatchId: string;
   rewardType: RewardType;
   rewardAmount: string;
   note: string;
+};
+
+type BankTransferContentEditState = {
+  paymentId: string;
+  transferContent: string;
+  loading: boolean;
+  error: string;
+};
+
+type DirectNoteEditState = {
+  id: string;
+  note: string;
+  loading: boolean;
+  error: string;
+};
+
+type CardNoteEditState = {
+  paymentId: string;
+  note: string;
+  loading: boolean;
+  error: string;
 };
 
 type ReportExportPreview = AdminLifetimeQrExportResult & {
@@ -223,6 +274,34 @@ function rechargeStatusLabel(value: AdminBankPaymentRow["rechargeStatus"]) {
   return "";
 }
 
+function canEditBankTransferContent(payment: AdminBankPaymentRow) {
+  return Boolean(payment.paidAt || payment.sepayId);
+}
+
+function directRechargeStatusLabel(status: AdminDirectRechargeRow["status"]) {
+  if (status === "completed") {
+    return "Đã nạp";
+  }
+
+  if (status === "failed") {
+    return "Lỗi";
+  }
+
+  return "Đang xử lý";
+}
+
+function directRechargeStatusClass(status: AdminDirectRechargeRow["status"]) {
+  if (status === "completed") {
+    return styles.statusCompleted;
+  }
+
+  if (status === "failed") {
+    return styles.statusFailed;
+  }
+
+  return styles.statusProcessing;
+}
+
 function sectionTitle(section: AdminSection) {
   if (section === "card") {
     return "Giao dịch nạp thẻ";
@@ -277,6 +356,17 @@ function getEmptyCardFilters(): CardFilterState {
   return {
     status: "all",
     litmatchId: "",
+    note: "",
+    updatedFrom: "",
+    updatedTo: "",
+  };
+}
+
+function getEmptyDirectFilters(): DirectFilterState {
+  return {
+    status: "all",
+    litmatchId: "",
+    note: "",
     updatedFrom: "",
     updatedTo: "",
   };
@@ -450,6 +540,10 @@ export default function AdminDashboard({
     useState<BankFilterState>(getEmptyBankFilters);
   const [appliedReportFilters, setAppliedReportFilters] =
     useState<BankFilterState>(getEmptyBankFilters);
+  const [directFilters, setDirectFilters] =
+    useState<DirectFilterState>(getEmptyDirectFilters);
+  const [appliedDirectFilters, setAppliedDirectFilters] =
+    useState<DirectFilterState>(getEmptyDirectFilters);
   const [blacklistFilters, setBlacklistFilters] =
     useState<BlacklistFilterState>(getEmptyBlacklistFilters);
   const [appliedBlacklistFilters, setAppliedBlacklistFilters] =
@@ -482,6 +576,12 @@ export default function AdminDashboard({
   const [directError, setDirectError] = useState("");
   const [directMessage, setDirectMessage] = useState("");
   const [directLoading, setDirectLoading] = useState(false);
+  const [bankTransferEdit, setBankTransferEdit] =
+    useState<BankTransferContentEditState | null>(null);
+  const [cardNoteEdit, setCardNoteEdit] =
+    useState<CardNoteEditState | null>(null);
+  const [directNoteEdit, setDirectNoteEdit] =
+    useState<DirectNoteEditState | null>(null);
   const hasBankFilters =
     appliedBankFilters.status !== "all" ||
     hasActiveFilters([
@@ -494,6 +594,7 @@ export default function AdminDashboard({
     appliedCardFilters.status !== "all" ||
     hasActiveFilters([
       appliedCardFilters.litmatchId,
+      appliedCardFilters.note,
       appliedCardFilters.updatedFrom,
       appliedCardFilters.updatedTo,
     ]);
@@ -504,6 +605,14 @@ export default function AdminDashboard({
       appliedReportFilters.transferContent,
       appliedReportFilters.updatedFrom,
       appliedReportFilters.updatedTo,
+    ]);
+  const hasDirectFilters =
+    appliedDirectFilters.status !== "all" ||
+    hasActiveFilters([
+      appliedDirectFilters.litmatchId,
+      appliedDirectFilters.note,
+      appliedDirectFilters.updatedFrom,
+      appliedDirectFilters.updatedTo,
     ]);
   const hasBlacklistFilters =
     appliedBlacklistFilters.status !== "all" ||
@@ -534,25 +643,39 @@ export default function AdminDashboard({
     selectableReportIds.length > 0 &&
     selectableReportIds.every((id) => selectedReportIds.includes(id));
 
-  function setPaymentPageData<TPayment>(
+  function setPaymentPageData(
+    type: "bank",
+    data: AdminPaginatedBankPayments,
+  ): void;
+  function setPaymentPageData(
+    type: "card",
+    data: AdminPaginatedCardPayments,
+  ): void;
+  function setPaymentPageData(
     type: PaymentKind,
-    data: AdminPaginatedPayments<TPayment>,
+    data:
+      | AdminPaginatedBankPayments
+      | AdminPaginatedCardPayments,
   ) {
     if (type === "bank") {
-      setBankPageData(data as AdminPaginatedPayments<AdminBankPaymentRow>);
+      setBankPageData(data as AdminPaginatedBankPayments);
       setBankPage(data.page);
     } else {
-      setCardPageData(data as AdminPaginatedPayments<AdminCardPaymentRow>);
+      setCardPageData(data as AdminPaginatedCardPayments);
       setCardPage(data.page);
     }
   }
 
-  async function fetchPaymentPage<TPayment>({
+  async function fetchPaymentPage<
+    TPayment,
+    TData extends AdminPaginatedPayments<TPayment> = AdminPaginatedPayments<TPayment>,
+  >({
     type,
     page,
     status,
     litmatchId,
     transferContent,
+    note,
     updatedFrom,
     updatedTo,
     signal,
@@ -562,10 +685,11 @@ export default function AdminDashboard({
     status: StatusFilter;
     litmatchId: string;
     transferContent?: string;
+    note?: string;
     updatedFrom: string;
     updatedTo: string;
     signal?: AbortSignal;
-  }) {
+  }): Promise<TData> {
     const params = new URLSearchParams({
       type,
       page: String(page),
@@ -579,11 +703,15 @@ export default function AdminDashboard({
       params.set("transferContent", transferContent.trim().toUpperCase());
     }
 
+    if (note) {
+      params.set("note", note.trim());
+    }
+
     const response = await fetch(
       `/api/admin/payments?${params.toString()}`,
       signal ? { signal } : undefined,
     );
-    const payload = (await response.json()) as PaymentsResponse<TPayment>;
+    const payload = (await response.json()) as PaymentsResponse<TData>;
 
     if (!response.ok || !payload.success || !payload.data) {
       throw new Error(payload.error ?? "Không tải được giao dịch.");
@@ -593,7 +721,10 @@ export default function AdminDashboard({
   }
 
   async function reloadBankPayments(page = bankPage) {
-    const data = await fetchPaymentPage<AdminBankPaymentRow>({
+    const data = await fetchPaymentPage<
+      AdminBankPaymentRow,
+      AdminPaginatedBankPayments
+    >({
       type: "bank",
       page,
       status: appliedBankFilters.status,
@@ -608,11 +739,15 @@ export default function AdminDashboard({
   }
 
   async function reloadCardPayments(page = cardPage) {
-    const data = await fetchPaymentPage<AdminCardPaymentRow>({
+    const data = await fetchPaymentPage<
+      AdminCardPaymentRow,
+      AdminPaginatedCardPayments
+    >({
       type: "card",
       page,
       status: appliedCardFilters.status,
       litmatchId: appliedCardFilters.litmatchId,
+      note: appliedCardFilters.note,
       updatedFrom: appliedCardFilters.updatedFrom,
       updatedTo: appliedCardFilters.updatedTo,
     });
@@ -621,13 +756,37 @@ export default function AdminDashboard({
     setPaymentPageData("card", data);
   }
 
-  async function fetchDirectRecharges(page: number, signal?: AbortSignal) {
+  async function fetchDirectRecharges({
+    page,
+    status,
+    litmatchId,
+    note,
+    updatedFrom,
+    updatedTo,
+    signal,
+  }: {
+    page: number;
+    status: DirectStatusFilter;
+    litmatchId: string;
+    note: string;
+    updatedFrom: string;
+    updatedTo: string;
+    signal?: AbortSignal;
+  }) {
+    const params = new URLSearchParams({
+      page: String(page),
+      status,
+      litmatchId: litmatchId.replace(/\D/g, ""),
+      note: note.trim(),
+      updatedFrom,
+      updatedTo,
+    });
     const response = await fetch(
-      `/api/admin/direct-recharges?page=${page}`,
+      `/api/admin/direct-recharges?${params.toString()}`,
       signal ? { signal } : undefined,
     );
     const payload =
-      (await response.json()) as PaymentsResponse<AdminDirectRechargeRow>;
+      (await response.json()) as PaymentsResponse<AdminPaginatedDirectRecharges>;
 
     if (!response.ok || !payload.success || !payload.data) {
       throw new Error(payload.error ?? "Không tải được lịch sử nạp trực tiếp.");
@@ -637,7 +796,14 @@ export default function AdminDashboard({
   }
 
   async function reloadDirectRecharges(page = directPage) {
-    const data = await fetchDirectRecharges(page);
+    const data = await fetchDirectRecharges({
+      page,
+      status: appliedDirectFilters.status,
+      litmatchId: appliedDirectFilters.litmatchId,
+      note: appliedDirectFilters.note,
+      updatedFrom: appliedDirectFilters.updatedFrom,
+      updatedTo: appliedDirectFilters.updatedTo,
+    });
 
     setDirectError("");
     setDirectPageData(data);
@@ -655,7 +821,9 @@ export default function AdminDashboard({
       signal ? { signal } : undefined,
     );
     const payload =
-      (await response.json()) as PaymentsResponse<AdminBankQrBlacklistRow>;
+      (await response.json()) as PaymentsResponse<
+        AdminPaginatedPayments<AdminBankQrBlacklistRow>
+      >;
 
     if (!response.ok || !payload.success || !payload.data) {
       throw new Error(payload.error ?? "Không tải được danh sách đen QR.");
@@ -692,7 +860,7 @@ export default function AdminDashboard({
   useEffect(() => {
     const controller = new AbortController();
 
-    fetchPaymentPage<AdminBankPaymentRow>({
+    fetchPaymentPage<AdminBankPaymentRow, AdminPaginatedBankPayments>({
       type: "bank",
       page: bankPage,
       status: appliedBankFilters.status,
@@ -704,7 +872,8 @@ export default function AdminDashboard({
     })
       .then((data) => {
         setBankError("");
-        setPaymentPageData("bank", data);
+        setBankPageData(data);
+        setBankPage(data.page);
       })
       .catch((error: unknown) => {
         if (error instanceof DOMException && error.name === "AbortError") {
@@ -725,18 +894,20 @@ export default function AdminDashboard({
   useEffect(() => {
     const controller = new AbortController();
 
-    fetchPaymentPage<AdminCardPaymentRow>({
+    fetchPaymentPage<AdminCardPaymentRow, AdminPaginatedCardPayments>({
       type: "card",
       page: cardPage,
       status: appliedCardFilters.status,
       litmatchId: appliedCardFilters.litmatchId,
+      note: appliedCardFilters.note,
       updatedFrom: appliedCardFilters.updatedFrom,
       updatedTo: appliedCardFilters.updatedTo,
       signal: controller.signal,
     })
       .then((data) => {
         setCardError("");
-        setPaymentPageData("card", data);
+        setCardPageData(data);
+        setCardPage(data.page);
       })
       .catch((error: unknown) => {
         if (error instanceof DOMException && error.name === "AbortError") {
@@ -757,7 +928,15 @@ export default function AdminDashboard({
   useEffect(() => {
     const controller = new AbortController();
 
-    fetchDirectRecharges(directPage, controller.signal)
+    fetchDirectRecharges({
+      page: directPage,
+      status: appliedDirectFilters.status,
+      litmatchId: appliedDirectFilters.litmatchId,
+      note: appliedDirectFilters.note,
+      updatedFrom: appliedDirectFilters.updatedFrom,
+      updatedTo: appliedDirectFilters.updatedTo,
+      signal: controller.signal,
+    })
       .then((data) => {
         setDirectError("");
         setDirectPageData(data);
@@ -777,6 +956,7 @@ export default function AdminDashboard({
 
     return () => controller.abort();
   }, [
+    appliedDirectFilters,
     directPage,
   ]);
 
@@ -879,6 +1059,19 @@ export default function AdminDashboard({
 
     setReportFilters(emptyFilters);
     setAppliedReportFilters(emptyFilters);
+  }
+
+  function applyDirectFilters() {
+    setAppliedDirectFilters(directFilters);
+    setDirectPage(1);
+  }
+
+  function clearDirectFilters() {
+    const emptyFilters = getEmptyDirectFilters();
+
+    setDirectFilters(emptyFilters);
+    setAppliedDirectFilters(emptyFilters);
+    setDirectPage(1);
   }
 
   function applyBlacklistFilters() {
@@ -1102,6 +1295,7 @@ export default function AdminDashboard({
             : {
                 status: appliedCardFilters.status,
                 litmatchId: appliedCardFilters.litmatchId,
+                note: appliedCardFilters.note,
                 updatedFrom: appliedCardFilters.updatedFrom,
                 updatedTo: appliedCardFilters.updatedTo,
               },
@@ -1183,6 +1377,145 @@ export default function AdminDashboard({
       );
     } finally {
       setBlacklistUpdatingId("");
+    }
+  }
+
+  async function saveBankTransferContentEdit() {
+    if (!bankTransferEdit) {
+      return;
+    }
+
+    setBankTransferEdit((current) =>
+      current ? { ...current, loading: true, error: "" } : current,
+    );
+    setBankError("");
+
+    try {
+      const response = await fetch("/api/admin/payments", {
+        method: "PATCH",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          type: "bank",
+          paymentId: bankTransferEdit.paymentId,
+          transferContent: bankTransferEdit.transferContent,
+        }),
+      });
+      const payload = (await response.json()) as BankPaymentUpdateResponse;
+
+      if (!response.ok || !payload.success || !payload.data) {
+        throw new Error(
+          payload.error ?? "Không cập nhật được nội dung chuyển khoản.",
+        );
+      }
+
+      setBankTransferEdit(null);
+      await reloadBankPayments();
+    } catch (error) {
+      setBankTransferEdit((current) =>
+        current
+          ? {
+              ...current,
+              loading: false,
+              error:
+                error instanceof Error
+                  ? error.message
+                  : "Không cập nhật được nội dung chuyển khoản.",
+            }
+          : current,
+      );
+    }
+  }
+
+  async function saveCardNoteEdit() {
+    if (!cardNoteEdit) {
+      return;
+    }
+
+    setCardNoteEdit((current) =>
+      current ? { ...current, loading: true, error: "" } : current,
+    );
+    setCardError("");
+
+    try {
+      const response = await fetch("/api/admin/payments", {
+        method: "PATCH",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          type: "card",
+          paymentId: cardNoteEdit.paymentId,
+          note: cardNoteEdit.note,
+        }),
+      });
+      const payload = (await response.json()) as CardPaymentUpdateResponse;
+
+      if (!response.ok || !payload.success || !payload.data) {
+        throw new Error(payload.error ?? "Không cập nhật được ghi chú.");
+      }
+
+      setCardNoteEdit(null);
+      await reloadCardPayments();
+    } catch (error) {
+      setCardNoteEdit((current) =>
+        current
+          ? {
+              ...current,
+              loading: false,
+              error:
+                error instanceof Error
+                  ? error.message
+                  : "Không cập nhật được ghi chú.",
+            }
+          : current,
+      );
+    }
+  }
+
+  async function saveDirectNoteEdit() {
+    if (!directNoteEdit) {
+      return;
+    }
+
+    setDirectNoteEdit((current) =>
+      current ? { ...current, loading: true, error: "" } : current,
+    );
+    setDirectError("");
+
+    try {
+      const response = await fetch("/api/admin/direct-recharges", {
+        method: "PATCH",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          id: directNoteEdit.id,
+          note: directNoteEdit.note,
+        }),
+      });
+      const payload = (await response.json()) as DirectRechargeUpdateResponse;
+
+      if (!response.ok || !payload.success || !payload.data) {
+        throw new Error(payload.error ?? "Không cập nhật được ghi chú.");
+      }
+
+      setDirectNoteEdit(null);
+      await reloadDirectRecharges();
+    } catch (error) {
+      setDirectNoteEdit((current) =>
+        current
+          ? {
+              ...current,
+              loading: false,
+              error:
+                error instanceof Error
+                  ? error.message
+                  : "Không cập nhật được ghi chú.",
+            }
+          : current,
+      );
     }
   }
 
@@ -1509,6 +1842,13 @@ export default function AdminDashboard({
                     onChange={updateField}
                   />
                   <Field
+                    label="Link GROUP CSKH"
+                    name="supportGroupUrl"
+                    value={form.supportGroupUrl}
+                    placeholder="https://zalo.me/g/..."
+                    onChange={updateField}
+                  />
+                  <Field
                     label="URL Facebook"
                     name="facebookUrl"
                     value={form.facebookUrl}
@@ -1799,6 +2139,49 @@ export default function AdminDashboard({
               </p>
             ) : null}
 
+            <div className={styles.summaryGrid}>
+              <div className={styles.summaryItem}>
+                <span>Giao dịch</span>
+                <strong>{formatNumber(bankPageData.summary.paymentCount)}</strong>
+              </div>
+              <div className={styles.summaryItem}>
+                <span>Đã nạp</span>
+                <strong>
+                  {formatNumber(bankPageData.summary.completedCount)}
+                </strong>
+              </div>
+              <div className={styles.summaryItem}>
+                <span>Lỗi nạp</span>
+                <strong>
+                  {formatNumber(bankPageData.summary.rechargeFailedCount)}
+                </strong>
+              </div>
+              <div className={styles.summaryItem}>
+                <span>Tổng tiền</span>
+                <strong>
+                  {formatNumber(bankPageData.summary.totalAmount)} đ
+                </strong>
+              </div>
+              <div className={styles.summaryItem}>
+                <span>Tổng thực nhận</span>
+                <strong>
+                  {formatNumber(bankPageData.summary.totalRewardAmount)}
+                </strong>
+              </div>
+              <div className={styles.summaryItem}>
+                <span>Kim cương</span>
+                <strong>
+                  {formatNumber(bankPageData.summary.diamondRewardAmount)}
+                </strong>
+              </div>
+              <div className={styles.summaryItem}>
+                <span>Sao</span>
+                <strong>
+                  {formatNumber(bankPageData.summary.starRewardAmount)}
+                </strong>
+              </div>
+            </div>
+
             <div className={styles.tableWrap}>
               <table className={styles.dataTable}>
                 <thead>
@@ -1863,17 +2246,38 @@ export default function AdminDashboard({
                           {payment.rechargeError ?? "-"}
                         </td>
                         <td data-label="Thao tác">
-                          {payment.canRetryRecharge ? (
-                            <button
-                              className={styles.inlineActionButton}
-                              type="button"
-                              disabled={rechargeSubmitting}
-                              onClick={() =>
-                                previewFailedRecharge("bank", payment.id)
-                              }
-                            >
-                              Nạp lại
-                            </button>
+                          {payment.canRetryRecharge ||
+                          canEditBankTransferContent(payment) ? (
+                            <div className={styles.inlineActions}>
+                              {payment.canRetryRecharge ? (
+                                <button
+                                  className={styles.inlineActionButton}
+                                  type="button"
+                                  disabled={rechargeSubmitting}
+                                  onClick={() =>
+                                    previewFailedRecharge("bank", payment.id)
+                                  }
+                                >
+                                  Nạp lại
+                                </button>
+                              ) : null}
+                              {canEditBankTransferContent(payment) ? (
+                                <button
+                                  className={styles.inlineActionButton}
+                                  type="button"
+                                  onClick={() =>
+                                    setBankTransferEdit({
+                                      paymentId: payment.id,
+                                      transferContent: payment.transferContent,
+                                      loading: false,
+                                      error: "",
+                                    })
+                                  }
+                                >
+                                  Sửa CK
+                                </button>
+                              ) : null}
+                            </div>
                           ) : (
                             "-"
                           )}
@@ -2050,6 +2454,124 @@ export default function AdminDashboard({
               </div>
             </div>
 
+            <div className={styles.filters} aria-label="Bộ lọc nạp trực tiếp">
+              <label className={styles.filterField}>
+                <span>Trạng thái</span>
+                <select
+                  value={directFilters.status}
+                  onChange={(event) =>
+                    setDirectFilters((current) => ({
+                      ...current,
+                      status: event.target.value as DirectStatusFilter,
+                    }))
+                  }
+                >
+                  <option value="all">Tất cả</option>
+                  <option value="pending">Đang xử lý</option>
+                  <option value="completed">Đã nạp</option>
+                  <option value="failed">Lỗi</option>
+                </select>
+              </label>
+              <label className={styles.filterField}>
+                <span>ID Litmatch</span>
+                <input
+                  inputMode="numeric"
+                  value={directFilters.litmatchId}
+                  placeholder="Nhập ID Litmatch"
+                  onChange={(event) =>
+                    setDirectFilters((current) => ({
+                      ...current,
+                      litmatchId: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+              <label className={styles.filterField}>
+                <span>Ghi chú</span>
+                <input
+                  value={directFilters.note}
+                  placeholder="Tìm theo ghi chú"
+                  onChange={(event) =>
+                    setDirectFilters((current) => ({
+                      ...current,
+                      note: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+              <DateFilterField
+                label="Cập nhật từ ngày"
+                value={directFilters.updatedFrom}
+                onChange={(value) =>
+                  setDirectFilters((current) => ({
+                    ...current,
+                    updatedFrom: value,
+                  }))
+                }
+              />
+              <DateFilterField
+                label="Cập nhật đến ngày"
+                value={directFilters.updatedTo}
+                onChange={(value) =>
+                  setDirectFilters((current) => ({
+                    ...current,
+                    updatedTo: value,
+                  }))
+                }
+              />
+              <button
+                className={styles.applyFilterButton}
+                type="button"
+                onClick={applyDirectFilters}
+              >
+                Áp dụng
+              </button>
+              <button
+                className={styles.clearFilterButton}
+                type="button"
+                onClick={clearDirectFilters}
+              >
+                Xóa lọc
+              </button>
+            </div>
+
+            <div className={styles.summaryGrid}>
+              <div className={styles.summaryItem}>
+                <span>Lượt nạp</span>
+                <strong>
+                  {formatNumber(directPageData.summary.rechargeCount)}
+                </strong>
+              </div>
+              <div className={styles.summaryItem}>
+                <span>Đã nạp</span>
+                <strong>
+                  {formatNumber(directPageData.summary.completedCount)}
+                </strong>
+              </div>
+              <div className={styles.summaryItem}>
+                <span>Lỗi</span>
+                <strong>{formatNumber(directPageData.summary.failedCount)}</strong>
+              </div>
+              <div className={styles.summaryItem}>
+                <span>Tổng số lượng</span>
+                <strong>
+                  {formatNumber(directPageData.summary.totalRewardAmount)}
+                </strong>
+              </div>
+              <div className={styles.summaryItem}>
+                <span>Kim cương</span>
+                <strong>
+                  {formatNumber(directPageData.summary.diamondRewardAmount)}
+                </strong>
+              </div>
+              <div className={styles.summaryItem}>
+                <span>Sao</span>
+                <strong>
+                  {formatNumber(directPageData.summary.starRewardAmount)}
+                </strong>
+              </div>
+            </div>
+
             <div className={styles.tableWrap}>
               <table className={styles.dataTable}>
                 <thead>
@@ -2061,6 +2583,7 @@ export default function AdminDashboard({
                     <th>Số lượng</th>
                     <th>Admin</th>
                     <th>Ghi chú</th>
+                    <th>Thao tác</th>
                     <th>Lỗi</th>
                     <th>Cập nhật</th>
                   </tr>
@@ -2071,19 +2594,11 @@ export default function AdminDashboard({
                       <tr key={row.id}>
                         <td data-label="Trạng thái">
                           <span
-                            className={`${styles.statusBadge} ${
-                              row.status === "completed"
-                                ? styles.statusCompleted
-                                : row.status === "failed"
-                                  ? styles.statusFailed
-                                  : styles.statusProcessing
-                            }`}
+                            className={`${styles.statusBadge} ${directRechargeStatusClass(
+                              row.status,
+                            )}`}
                           >
-                            {row.status === "completed"
-                              ? "Đã nạp"
-                              : row.status === "failed"
-                                ? "Lỗi"
-                                : "Đang xử lý"}
+                            {directRechargeStatusLabel(row.status)}
                           </span>
                         </td>
                         <td data-label="ID Litmatch">{row.litmatchId}</td>
@@ -2098,6 +2613,22 @@ export default function AdminDashboard({
                         </td>
                         <td data-label="Admin">{row.adminUsername}</td>
                         <td data-label="Ghi chú">{row.note ?? "-"}</td>
+                        <td data-label="Thao tác">
+                          <button
+                            className={styles.inlineActionButton}
+                            type="button"
+                            onClick={() =>
+                              setDirectNoteEdit({
+                                id: row.id,
+                                note: row.note ?? "",
+                                loading: false,
+                                error: "",
+                              })
+                            }
+                          >
+                            Sửa ghi chú
+                          </button>
+                        </td>
                         <td data-label="Lỗi" className={styles.errorCell}>
                           {row.rechargeError ?? "-"}
                         </td>
@@ -2108,8 +2639,10 @@ export default function AdminDashboard({
                     ))
                   ) : (
                     <tr>
-                      <td colSpan={9} className={styles.emptyCell}>
-                        Chưa có lịch sử nạp trực tiếp.
+                      <td colSpan={10} className={styles.emptyCell}>
+                        {hasDirectFilters
+                          ? "Không có lịch sử nạp trực tiếp phù hợp bộ lọc."
+                          : "Chưa có lịch sử nạp trực tiếp."}
                       </td>
                     </tr>
                   )}
@@ -2644,6 +3177,19 @@ export default function AdminDashboard({
                   }}
                 />
               </label>
+              <label className={styles.filterField}>
+                <span>Ghi chú</span>
+                <input
+                  value={cardFilters.note}
+                  placeholder="Tìm theo ghi chú"
+                  onChange={(event) => {
+                    setCardFilters((current) => ({
+                      ...current,
+                      note: event.target.value,
+                    }));
+                  }}
+                />
+              </label>
               <DateFilterField
                 label="Cập nhật từ ngày"
                 value={cardFilters.updatedFrom}
@@ -2685,7 +3231,7 @@ export default function AdminDashboard({
                 <strong>Xóa giao dịch chưa thanh toán</strong>
                 <p>
                   Xóa các giao dịch nạp thẻ trạng thái Chưa thanh toán đang khớp
-                  ID Litmatch và khoảng ngày cập nhật.
+                  ID Litmatch, ghi chú và khoảng ngày cập nhật.
                 </p>
               </div>
               <button
@@ -2715,6 +3261,55 @@ export default function AdminDashboard({
               </p>
             ) : null}
 
+            <div className={styles.summaryGrid}>
+              <div className={styles.summaryItem}>
+                <span>Giao dịch</span>
+                <strong>{formatNumber(cardPageData.summary.paymentCount)}</strong>
+              </div>
+              <div className={styles.summaryItem}>
+                <span>Đã nạp</span>
+                <strong>
+                  {formatNumber(cardPageData.summary.completedCount)}
+                </strong>
+              </div>
+              <div className={styles.summaryItem}>
+                <span>Lỗi nạp</span>
+                <strong>
+                  {formatNumber(cardPageData.summary.rechargeFailedCount)}
+                </strong>
+              </div>
+              <div className={styles.summaryItem}>
+                <span>Tổng mệnh giá</span>
+                <strong>
+                  {formatNumber(cardPageData.summary.totalDeclaredAmount)} đ
+                </strong>
+              </div>
+              <div className={styles.summaryItem}>
+                <span>MG thực tế</span>
+                <strong>
+                  {formatNumber(cardPageData.summary.totalActualAmount)} đ
+                </strong>
+              </div>
+              <div className={styles.summaryItem}>
+                <span>Tổng thực nhận</span>
+                <strong>
+                  {formatNumber(cardPageData.summary.totalRewardAmount)}
+                </strong>
+              </div>
+              <div className={styles.summaryItem}>
+                <span>Kim cương</span>
+                <strong>
+                  {formatNumber(cardPageData.summary.diamondRewardAmount)}
+                </strong>
+              </div>
+              <div className={styles.summaryItem}>
+                <span>Sao</span>
+                <strong>
+                  {formatNumber(cardPageData.summary.starRewardAmount)}
+                </strong>
+              </div>
+            </div>
+
             <div className={styles.tableWrap}>
               <table className={styles.dataTable}>
                 <thead>
@@ -2731,6 +3326,7 @@ export default function AdminDashboard({
                     <th>Thực nhận</th>
                     <th>Nạp Litmatch</th>
                     <th>Lỗi nạp</th>
+                    <th>Ghi chú</th>
                     <th>Thao tác</th>
                     <th>Mã thẻ</th>
                     <th>Seri</th>
@@ -2808,21 +3404,38 @@ export default function AdminDashboard({
                         <td data-label="Lỗi nạp" className={styles.errorCell}>
                           {payment.rechargeError ?? "-"}
                         </td>
+                        <td data-label="Ghi chú" className={styles.errorCell}>
+                          {payment.note ?? "-"}
+                        </td>
                         <td data-label="Thao tác">
-                          {payment.canRetryRecharge ? (
+                          <div className={styles.inlineActions}>
+                            {payment.canRetryRecharge ? (
+                              <button
+                                className={styles.inlineActionButton}
+                                type="button"
+                                disabled={rechargeSubmitting}
+                                onClick={() =>
+                                  previewFailedRecharge("card", payment.id)
+                                }
+                              >
+                                Nạp lại
+                              </button>
+                            ) : null}
                             <button
                               className={styles.inlineActionButton}
                               type="button"
-                              disabled={rechargeSubmitting}
                               onClick={() =>
-                                previewFailedRecharge("card", payment.id)
+                                setCardNoteEdit({
+                                  paymentId: payment.id,
+                                  note: payment.note ?? "",
+                                  loading: false,
+                                  error: "",
+                                })
                               }
                             >
-                              Nạp lại
+                              Sửa ghi chú
                             </button>
-                          ) : (
-                            "-"
-                          )}
+                          </div>
                         </td>
                         <td data-label="Mã thẻ" className={styles.monoCell}>
                           {payment.cardCode}
@@ -2837,7 +3450,7 @@ export default function AdminDashboard({
                     ))
                   ) : (
                     <tr>
-                      <td colSpan={16} className={styles.emptyCell}>
+                      <td colSpan={17} className={styles.emptyCell}>
                         {hasCardFilters
                           ? "Không có giao dịch nạp thẻ phù hợp bộ lọc."
                           : "Chưa có giao dịch nạp thẻ."}
@@ -2877,6 +3490,221 @@ export default function AdminDashboard({
               </div>
             </div>
           </section>
+        ) : null}
+
+        {bankTransferEdit ? (
+          <div className={styles.modalBackdrop} role="presentation">
+            <div
+              className={styles.modalPanel}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="bank-transfer-edit-title"
+            >
+              <div className={styles.modalHeader}>
+                <div>
+                  <p className={styles.kicker}>Chỉnh sửa</p>
+                  <h2 id="bank-transfer-edit-title">Nội dung chuyển khoản</h2>
+                </div>
+                <button
+                  className={styles.iconButton}
+                  type="button"
+                  aria-label="Đóng"
+                  disabled={bankTransferEdit.loading}
+                  onClick={() => setBankTransferEdit(null)}
+                >
+                  x
+                </button>
+              </div>
+
+              <label className={styles.field}>
+                <span>Nội dung CK</span>
+                <input
+                  value={bankTransferEdit.transferContent}
+                  maxLength={120}
+                  onChange={(event) =>
+                    setBankTransferEdit((current) =>
+                      current
+                        ? {
+                            ...current,
+                            transferContent: event.target.value,
+                            error: "",
+                          }
+                        : current,
+                    )
+                  }
+                />
+              </label>
+
+              {bankTransferEdit.error ? (
+                <p className={styles.errorText} role="alert">
+                  {bankTransferEdit.error}
+                </p>
+              ) : null}
+
+              <div className={styles.modalActions}>
+                <button
+                  className={styles.clearFilterButton}
+                  type="button"
+                  disabled={bankTransferEdit.loading}
+                  onClick={() => setBankTransferEdit(null)}
+                >
+                  Hủy
+                </button>
+                <button
+                  className={styles.applyFilterButton}
+                  type="button"
+                  disabled={bankTransferEdit.loading}
+                  onClick={saveBankTransferContentEdit}
+                >
+                  {bankTransferEdit.loading ? "Đang lưu..." : "Lưu"}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {cardNoteEdit ? (
+          <div className={styles.modalBackdrop} role="presentation">
+            <div
+              className={styles.modalPanel}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="card-note-edit-title"
+            >
+              <div className={styles.modalHeader}>
+                <div>
+                  <p className={styles.kicker}>Chỉnh sửa</p>
+                  <h2 id="card-note-edit-title">Ghi chú nạp thẻ</h2>
+                </div>
+                <button
+                  className={styles.iconButton}
+                  type="button"
+                  aria-label="Đóng"
+                  disabled={cardNoteEdit.loading}
+                  onClick={() => setCardNoteEdit(null)}
+                >
+                  x
+                </button>
+              </div>
+
+              <label className={styles.field}>
+                <span>Ghi chú</span>
+                <textarea
+                  value={cardNoteEdit.note}
+                  rows={4}
+                  maxLength={500}
+                  onChange={(event) =>
+                    setCardNoteEdit((current) =>
+                      current
+                        ? {
+                            ...current,
+                            note: event.target.value,
+                            error: "",
+                          }
+                        : current,
+                    )
+                  }
+                />
+              </label>
+
+              {cardNoteEdit.error ? (
+                <p className={styles.errorText} role="alert">
+                  {cardNoteEdit.error}
+                </p>
+              ) : null}
+
+              <div className={styles.modalActions}>
+                <button
+                  className={styles.clearFilterButton}
+                  type="button"
+                  disabled={cardNoteEdit.loading}
+                  onClick={() => setCardNoteEdit(null)}
+                >
+                  Hủy
+                </button>
+                <button
+                  className={styles.applyFilterButton}
+                  type="button"
+                  disabled={cardNoteEdit.loading}
+                  onClick={saveCardNoteEdit}
+                >
+                  {cardNoteEdit.loading ? "Đang lưu..." : "Lưu"}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {directNoteEdit ? (
+          <div className={styles.modalBackdrop} role="presentation">
+            <div
+              className={styles.modalPanel}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="direct-note-edit-title"
+            >
+              <div className={styles.modalHeader}>
+                <div>
+                  <p className={styles.kicker}>Chỉnh sửa</p>
+                  <h2 id="direct-note-edit-title">Ghi chú nạp trực tiếp</h2>
+                </div>
+                <button
+                  className={styles.iconButton}
+                  type="button"
+                  aria-label="Đóng"
+                  disabled={directNoteEdit.loading}
+                  onClick={() => setDirectNoteEdit(null)}
+                >
+                  x
+                </button>
+              </div>
+
+              <label className={styles.field}>
+                <span>Ghi chú</span>
+                <textarea
+                  value={directNoteEdit.note}
+                  rows={4}
+                  maxLength={500}
+                  onChange={(event) =>
+                    setDirectNoteEdit((current) =>
+                      current
+                        ? {
+                            ...current,
+                            note: event.target.value,
+                            error: "",
+                          }
+                        : current,
+                    )
+                  }
+                />
+              </label>
+
+              {directNoteEdit.error ? (
+                <p className={styles.errorText} role="alert">
+                  {directNoteEdit.error}
+                </p>
+              ) : null}
+
+              <div className={styles.modalActions}>
+                <button
+                  className={styles.clearFilterButton}
+                  type="button"
+                  disabled={directNoteEdit.loading}
+                  onClick={() => setDirectNoteEdit(null)}
+                >
+                  Hủy
+                </button>
+                <button
+                  className={styles.applyFilterButton}
+                  type="button"
+                  disabled={directNoteEdit.loading}
+                  onClick={saveDirectNoteEdit}
+                >
+                  {directNoteEdit.loading ? "Đang lưu..." : "Lưu"}
+                </button>
+              </div>
+            </div>
+          </div>
         ) : null}
 
         {rechargePreview ? (

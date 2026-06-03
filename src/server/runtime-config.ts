@@ -24,6 +24,7 @@ const DEFAULT_BANK_CONFIG: BankConfig = {
 const DEFAULT_SITE_CONFIG: SiteConfig = {
   dealerName: DEFAULT_DEALER_NAME,
   zaloPhone: "",
+  supportGroupUrl: "",
   facebookUrl: "",
   phoneNumber: "",
   announcementEnabled: false,
@@ -134,6 +135,10 @@ export function normalizeRuntimeConfig(
     site: {
       dealerName: nonEmptyString(site.dealerName, fallback.site.dealerName),
       zaloPhone: optionalString(site.zaloPhone, fallback.site.zaloPhone),
+      supportGroupUrl: optionalString(
+        site.supportGroupUrl,
+        fallback.site.supportGroupUrl,
+      ),
       facebookUrl: optionalString(site.facebookUrl, fallback.site.facebookUrl),
       phoneNumber: optionalString(site.phoneNumber, fallback.site.phoneNumber),
       announcementEnabled: booleanValue(
@@ -180,6 +185,7 @@ export async function getRuntimeConfig(): Promise<RuntimeConfig> {
       !rawConfig.bankRate ||
       !rawConfig.cardRate ||
       !rawConfig.site ||
+      !("supportGroupUrl" in (rawConfig.site as Record<string, unknown>)) ||
       rawConfig.totp ||
       rawConfig.litmatchAgent
     ) {

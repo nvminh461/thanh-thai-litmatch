@@ -19,6 +19,7 @@ export function toAdminRuntimeConfigForm(
     paymentCodePrefix: config.paymentCodePrefix,
     dealerName: config.site.dealerName,
     zaloPhone: config.site.zaloPhone,
+    supportGroupUrl: config.site.supportGroupUrl,
     facebookUrl: config.site.facebookUrl,
     phoneNumber: config.site.phoneNumber,
     announcementEnabled: config.site.announcementEnabled,
