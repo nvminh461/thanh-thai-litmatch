@@ -160,6 +160,7 @@ Admin có các màn:
 - Cấu hình hệ thống: VietQR, tỉ lệ chuyển khoản, tỉ lệ nạp thẻ, thông tin liên hệ và link GROUP CSKH riêng.
 - Giao dịch chuyển khoản: lọc trạng thái, ID Litmatch, nội dung chuyển khoản, ngày cập nhật, phân biệt QR cố định/QR trọn đời, phân trang 20 giao dịch/trang.
 - Giao dịch nạp thẻ: lọc trạng thái, ID Litmatch, ghi chú, ngày cập nhật, thống kê theo bộ lọc, thông tin PAY1S/callback, trạng thái nạp Litmatch, phân trang 20 giao dịch/trang.
+- Danh sách đen giao dịch: ID bị chặn tạo QR hoặc nạp thẻ khi có 5 giao dịch QR chưa thanh toán hoặc 5 giao dịch thẻ không thành công liên tiếp.
 
 Các trạng thái giao dịch:
 

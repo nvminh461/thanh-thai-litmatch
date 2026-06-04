@@ -312,7 +312,7 @@ function sectionTitle(section: AdminSection) {
   }
 
   if (section === "blacklist") {
-    return "Danh sách đen QR";
+    return "Danh sách đen giao dịch";
   }
 
   if (section === "report") {
@@ -826,7 +826,9 @@ export default function AdminDashboard({
       >;
 
     if (!response.ok || !payload.success || !payload.data) {
-      throw new Error(payload.error ?? "Không tải được danh sách đen QR.");
+      throw new Error(
+        payload.error ?? "Không tải được danh sách đen giao dịch.",
+      );
     }
 
     return payload.data;
@@ -977,7 +979,7 @@ export default function AdminDashboard({
         setBlacklistError(
           error instanceof Error
             ? error.message
-            : "Không tải được danh sách đen QR.",
+            : "Không tải được danh sách đen giao dịch.",
         );
       });
 
@@ -1760,7 +1762,7 @@ export default function AdminDashboard({
             type="button"
             onClick={() => setActiveSection("blacklist")}
           >
-            <span>Danh sách đen QR</span>
+            <span>Danh sách đen giao dịch</span>
             <small>{formatNumber(blacklistPageData.total)}</small>
           </button>
           <button
@@ -2691,10 +2693,10 @@ export default function AdminDashboard({
           >
             <div className={styles.panelHeader}>
               <div>
-                <h2 id="bank-qr-blacklist-title">Danh sách đen QR</h2>
+                <h2 id="bank-qr-blacklist-title">Danh sách đen giao dịch</h2>
                 <p>
-                  Các ID bị chặn tạo QR chuyển khoản vì có 5 giao dịch chưa
-                  thanh toán liên tiếp.
+                  Các ID bị chặn tạo QR chuyển khoản hoặc nạp thẻ vì có 5 giao
+                  dịch chưa thanh toán hoặc không thành công liên tiếp.
                 </p>
               </div>
             </div>
@@ -2827,7 +2829,7 @@ export default function AdminDashboard({
                       <td colSpan={8} className={styles.emptyCell}>
                         {hasBlacklistFilters
                           ? "Không có ID nào khớp bộ lọc."
-                          : "Chưa có ID nào trong danh sách đen QR."}
+                          : "Chưa có ID nào trong danh sách đen giao dịch."}
                       </td>
                     </tr>
                   )}
@@ -2837,7 +2839,7 @@ export default function AdminDashboard({
 
             <div
               className={styles.pagination}
-              aria-label="Phân trang danh sách đen QR"
+              aria-label="Phân trang danh sách đen giao dịch"
             >
               <span>
                 Trang {formatNumber(blacklistPageData.page)}/
