@@ -66,11 +66,13 @@ const LIFETIME_QR_DIAMOND_PREFIX = "LMKC";
 const LIFETIME_QR_STAR_PREFIX = "LMSAO";
 const DIAMOND_SALE_PREFIX = "LMXA";
 const DIAMOND_SALE_ORDER_CODE_LENGTH = 8;
-const BANK_QR_BLACKLIST_INCOMPLETE_LIMIT = 5;
+const PAYMENT_BLACKLIST_LIMIT = 5;
 const BANK_QR_BLACKLIST_REASON =
   "Có 5 giao dịch chuyển khoản chưa thanh toán liên tiếp.";
-const BANK_QR_BLACKLIST_ERROR =
-  "ID Litmatch này đang bị chặn tạo QR do có nhiều giao dịch chuyển khoản chưa thanh toán. Vui lòng liên hệ admin.";
+const CARD_PAYMENT_BLACKLIST_REASON =
+  "Có 5 giao dịch nạp thẻ không thành công liên tiếp.";
+const PAYMENT_BLACKLIST_ERROR =
+  "ID Litmatch này đang bị chặn tạo QR hoặc nạp thẻ do có nhiều giao dịch chưa hoàn tất. Vui lòng liên hệ admin.";
 export const ADMIN_PAYMENT_PAGE_SIZE = 20;
 
 export class PaymentValidationError extends Error {
@@ -2111,7 +2113,7 @@ async function summarizeDiamondSalePayments(
   return summary ?? emptyDiamondSalePaymentSummary;
 }
 
-async function assertBankQrCreationAllowed(litmatchId: string) {
+async function assertPaymentCreationNotBlacklisted(litmatchId: string) {
   const blacklist =
     await getCollection<BankQrBlacklistDocument>("bank_qr_blacklist");
   const activeBlacklist = await blacklist.findOne({
@@ -2120,7 +2122,7 @@ async function assertBankQrCreationAllowed(litmatchId: string) {
   });
 
   if (activeBlacklist) {
-    throw new PaymentValidationError(BANK_QR_BLACKLIST_ERROR);
+    throw new PaymentValidationError(PAYMENT_BLACKLIST_ERROR);
   }
 
   const latestUnblockedBlacklist = await blacklist.findOne(
@@ -2131,43 +2133,32 @@ async function assertBankQrCreationAllowed(litmatchId: string) {
     },
     { sort: { unblockedAt: -1, updatedAt: -1 } },
   );
-  const createdAfterUnblock = latestUnblockedBlacklist?.unblockedAt
+
+  return latestUnblockedBlacklist?.unblockedAt
     ? { createdAt: { $gt: latestUnblockedBlacklist.unblockedAt } }
     : {};
-  const bankPayments = await getCollection<BankPaymentDocument>("bank_payments");
-  const recentFixedPayments = await bankPayments
-    .find({
-      litmatchId,
-      ...createdAfterUnblock,
-      $or: [{ mode: "fixed" }, { mode: { $exists: false } }],
-    })
-    .sort({ createdAt: -1 })
-    .limit(BANK_QR_BLACKLIST_INCOMPLETE_LIMIT)
-    .toArray();
+}
 
-  if (
-    recentFixedPayments.length < BANK_QR_BLACKLIST_INCOMPLETE_LIMIT ||
-    recentFixedPayments.some((payment) => payment.status !== "incomplete")
-  ) {
-    return;
-  }
-
+async function activatePaymentBlacklist(input: {
+  litmatchId: string;
+  reason: string;
+  triggeredByPaymentIds: ObjectId[];
+}) {
+  const blacklist =
+    await getCollection<BankQrBlacklistDocument>("bank_qr_blacklist");
   const now = new Date();
-  const triggeredByPaymentIds = recentFixedPayments
-    .map((payment) => payment._id)
-    .filter((id): id is ObjectId => Boolean(id));
 
   await blacklist.updateOne(
-    { litmatchId, status: "active" },
+    { litmatchId: input.litmatchId, status: "active" },
     {
       $setOnInsert: {
-        litmatchId,
+        litmatchId: input.litmatchId,
         status: "active",
         createdAt: now,
       },
       $set: {
-        reason: BANK_QR_BLACKLIST_REASON,
-        triggeredByPaymentIds,
+        reason: input.reason,
+        triggeredByPaymentIds: input.triggeredByPaymentIds,
         blockedAt: now,
         updatedAt: now,
       },
@@ -2178,8 +2169,76 @@ async function assertBankQrCreationAllowed(litmatchId: string) {
     },
     { upsert: true },
   );
+}
 
-  throw new PaymentValidationError(BANK_QR_BLACKLIST_ERROR);
+function collectPaymentObjectIds(payments: Array<{ _id?: ObjectId }>) {
+  return payments
+    .map((payment) => payment._id)
+    .filter((id): id is ObjectId => Boolean(id));
+}
+
+function isSuccessfulCardPayment(payment: CardPaymentDocument) {
+  return payment.status === "completed";
+}
+
+async function assertBankQrCreationAllowed(litmatchId: string) {
+  const createdAfterUnblock =
+    await assertPaymentCreationNotBlacklisted(litmatchId);
+  const bankPayments = await getCollection<BankPaymentDocument>("bank_payments");
+  const recentFixedPayments = await bankPayments
+    .find({
+      litmatchId,
+      ...createdAfterUnblock,
+      $or: [{ mode: "fixed" }, { mode: { $exists: false } }],
+    })
+    .sort({ createdAt: -1 })
+    .limit(PAYMENT_BLACKLIST_LIMIT)
+    .toArray();
+
+  if (
+    recentFixedPayments.length < PAYMENT_BLACKLIST_LIMIT ||
+    recentFixedPayments.some((payment) => payment.status !== "incomplete")
+  ) {
+    return;
+  }
+
+  await activatePaymentBlacklist({
+    litmatchId,
+    reason: BANK_QR_BLACKLIST_REASON,
+    triggeredByPaymentIds: collectPaymentObjectIds(recentFixedPayments),
+  });
+
+  throw new PaymentValidationError(PAYMENT_BLACKLIST_ERROR);
+}
+
+async function assertCardPaymentCreationAllowed(litmatchId: string) {
+  const createdAfterUnblock =
+    await assertPaymentCreationNotBlacklisted(litmatchId);
+  const cardPayments =
+    await getCollection<CardPaymentDocument>("card_payments");
+  const recentCardPayments = await cardPayments
+    .find({
+      litmatchId,
+      ...createdAfterUnblock,
+    })
+    .sort({ createdAt: -1 })
+    .limit(PAYMENT_BLACKLIST_LIMIT)
+    .toArray();
+
+  if (
+    recentCardPayments.length < PAYMENT_BLACKLIST_LIMIT ||
+    recentCardPayments.some(isSuccessfulCardPayment)
+  ) {
+    return;
+  }
+
+  await activatePaymentBlacklist({
+    litmatchId,
+    reason: CARD_PAYMENT_BLACKLIST_REASON,
+    triggeredByPaymentIds: collectPaymentObjectIds(recentCardPayments),
+  });
+
+  throw new PaymentValidationError(PAYMENT_BLACKLIST_ERROR);
 }
 
 export async function createBankPayment(input: {
@@ -2478,6 +2537,7 @@ export async function createCardPayment(input: {
   const cardDenomination = normalizeCardDenomination(input.cardDenomination);
   const cardCode = normalizeRequiredString(input.cardCode, "mã thẻ");
   const cardSerial = normalizeRequiredString(input.cardSerial, "số seri");
+  await assertCardPaymentCreationAllowed(litmatchId);
   let verifiedUser: TargetUserInfo;
 
   try {

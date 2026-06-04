@@ -175,6 +175,7 @@ Admin có các màn:
 - Giao dịch chuyển khoản: lọc trạng thái, ID Litmatch, nội dung chuyển khoản, ngày cập nhật, phân biệt QR cố định/QR trọn đời, phân trang 20 giao dịch/trang.
 - Giao dịch nạp thẻ: lọc trạng thái, ID Litmatch, ghi chú, ngày cập nhật, thống kê theo bộ lọc, thông tin PAY1S/callback, trạng thái nạp Litmatch, phân trang 20 giao dịch/trang.
 - Kim cương xả: lọc trạng thái, nguồn tạo QR/tự chuyển khoản, ID Litmatch, mã đơn/nội dung CK, ngày cập nhật, thống kê theo bộ lọc và retry giao dịch lỗi.
+- Danh sách đen giao dịch: ID bị chặn tạo QR hoặc nạp thẻ khi có 5 giao dịch QR chưa thanh toán hoặc 5 giao dịch thẻ không thành công liên tiếp.
 
 Các trạng thái giao dịch:
 
