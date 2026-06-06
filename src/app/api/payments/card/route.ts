@@ -13,6 +13,7 @@ export async function POST(request: Request) {
       cardDenomination?: unknown;
       cardCode?: unknown;
       cardSerial?: unknown;
+      ctvCode?: unknown;
     };
     const data = await createCardPayment(body);
 

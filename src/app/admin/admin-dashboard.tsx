@@ -9,6 +9,7 @@ import type {
   AdminBankQrBlacklistStatus,
   AdminCardPaymentRow,
   AdminPaginatedCardPayments,
+  AdminPaginatedCtvs,
   AdminDirectRechargeRow,
   AdminLifetimeQrExportResult,
   AdminLifetimeQrReport,
@@ -20,6 +21,7 @@ import type {
 } from "@/lib/admin-types";
 import { buildLitmatchAvatarUrl } from "@/lib/litmatch-avatar";
 import type { RewardType } from "@/lib/payment-config";
+import CtvAdminPanel from "./ctv-admin-panel";
 import styles from "./admin.module.css";
 
 type AdminDashboardProps = {
@@ -30,6 +32,7 @@ type AdminDashboardProps = {
   lifetimeQrReport: AdminLifetimeQrReport;
   directRecharges: AdminPaginatedDirectRecharges;
   bankQrBlacklist: AdminPaginatedPayments<AdminBankQrBlacklistRow>;
+  ctvs: AdminPaginatedCtvs;
 };
 
 type ConfigFormState = Omit<
@@ -61,6 +64,7 @@ type AdminSection =
   | "direct"
   | "blacklist"
   | "report"
+  | "ctv"
   | "settings";
 type StatusFilter = "all" | AdminPaymentStatus;
 type DirectStatusFilter = "all" | AdminDirectRechargeRow["status"];
@@ -319,6 +323,10 @@ function sectionTitle(section: AdminSection) {
     return "Báo cáo thống kê";
   }
 
+  if (section === "ctv") {
+    return "Quản lý CTV";
+  }
+
   if (section === "settings") {
     return "Cấu hình hệ thống";
   }
@@ -511,6 +519,7 @@ export default function AdminDashboard({
   lifetimeQrReport,
   directRecharges,
   bankQrBlacklist,
+  ctvs,
 }: AdminDashboardProps) {
   const [form, setForm] = useState<ConfigFormState>(() =>
     toFormState(initialConfig),
@@ -1777,6 +1786,16 @@ export default function AdminDashboard({
           </button>
           <button
             className={`${styles.sidebarButton} ${
+              activeSection === "ctv" ? styles.sidebarButtonActive : ""
+            }`}
+            type="button"
+            onClick={() => setActiveSection("ctv")}
+          >
+            <span>Quản lý CTV</span>
+            <small>{formatNumber(ctvs.total)}</small>
+          </button>
+          <button
+            className={`${styles.sidebarButton} ${
               activeSection === "settings" ? styles.sidebarButtonActive : ""
             }`}
             type="button"
@@ -2005,6 +2024,8 @@ export default function AdminDashboard({
             </form>
           </section>
         ) : null}
+
+        {activeSection === "ctv" ? <CtvAdminPanel initialCtvs={ctvs} /> : null}
 
         {activeSection === "bank" ? (
           <section

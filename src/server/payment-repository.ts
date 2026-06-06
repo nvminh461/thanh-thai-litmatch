@@ -48,6 +48,11 @@ import {
   type Pay1sChargingRequest,
   type Pay1sChargingResponse,
 } from "@/server/pay1s/client";
+import {
+  resolveCtvRefSnapshot,
+  serializeCtvRef,
+  type CtvRefSnapshot,
+} from "./ctv-repository";
 import { getCollection } from "./mongo";
 import { getRuntimeConfig } from "./runtime-config";
 
@@ -113,6 +118,7 @@ export type BankPaymentDocument = {
   mode?: BankPaymentMode;
   status: PaymentStatus;
   litmatchId: string;
+  ctvRef?: CtvRefSnapshot;
   verifiedUser?: TargetUserInfo & {
     verifiedAt: Date;
   };
@@ -156,6 +162,7 @@ export type LifetimeBankQrDocument = {
   _id?: ObjectId;
   status: "active";
   litmatchId: string;
+  ctvRef?: CtvRefSnapshot;
   verifiedUser?: TargetUserInfo & {
     verifiedAt: Date;
   };
@@ -183,6 +190,7 @@ export type CardPaymentDocument = {
   _id?: ObjectId;
   status: PaymentStatus;
   litmatchId: string;
+  ctvRef?: CtvRefSnapshot;
   verifiedUser?: TargetUserInfo & {
     verifiedAt: Date;
   };
@@ -462,6 +470,7 @@ function normalizeLifetimeQrTransferContent(value: unknown) {
         : null;
   const litmatchId =
     parts.length === 2 ? parts[1] : parts.length === 3 ? parts[2] : "";
+  const ctvCode = parts.length === 3 ? parts[1] : undefined;
   const hasValidCtvCode =
     parts.length === 2 || (parts.length === 3 && /^[A-Z0-9]+$/.test(parts[1]));
 
@@ -480,6 +489,7 @@ function normalizeLifetimeQrTransferContent(value: unknown) {
     transferContent: normalized,
     litmatchId: normalizePaymentLitmatchId(litmatchId),
     rewardType,
+    ctvCode,
   };
 }
 
@@ -586,6 +596,7 @@ function serializeBankPayment(payment: BankPaymentDocument): AdminBankPaymentRow
     bankMode: payment.mode ?? "fixed",
     status: payment.status,
     litmatchId: payment.litmatchId,
+    ctvRef: serializeCtvRef(payment.ctvRef),
     amount: payment.amount,
     rewardType: payment.rewardType,
     rewardAmount: payment.rewardAmount,
@@ -630,6 +641,7 @@ function serializeCardPayment(payment: CardPaymentDocument): AdminCardPaymentRow
     id: payment._id?.toString() ?? "",
     status: payment.status,
     litmatchId: payment.litmatchId,
+    ctvRef: serializeCtvRef(payment.ctvRef),
     rewardType: payment.rewardType,
     requestId: payment.requestId ?? null,
     cardProvider: payment.cardProvider,
@@ -1686,6 +1698,7 @@ export async function createBankPayment(input: {
   litmatchId?: unknown;
   amount?: unknown;
   rewardType?: unknown;
+  ctvCode?: unknown;
 }) {
   const config = await getRuntimeConfig();
   assertBankConfig(config);
@@ -1694,6 +1707,7 @@ export async function createBankPayment(input: {
   const amount = normalizeAmount(input.amount);
   const rewardType = input.rewardType;
   assertRewardType(rewardType);
+  const ctvRef = await resolveCtvRefSnapshot(input.ctvCode);
   await assertBankQrCreationAllowed(litmatchId);
 
   let verifiedUser: TargetUserInfo;
@@ -1735,6 +1749,7 @@ export async function createBankPayment(input: {
       mode: "fixed",
       status: "incomplete" as const,
       litmatchId,
+      ...(ctvRef ? { ctvRef } : {}),
       verifiedUser: {
         ...verifiedUser,
         verifiedAt: now,
@@ -1784,6 +1799,7 @@ export async function createLifetimeBankQr(input: {
   litmatchId?: unknown;
   rewardType?: unknown;
   transferContent?: unknown;
+  ctvCode?: unknown;
 }) {
   const config = await getRuntimeConfig();
   assertBankConfig(config);
@@ -1792,9 +1808,11 @@ export async function createLifetimeBankQr(input: {
     transferContent,
     litmatchId,
     rewardType: contentRewardType,
+    ctvCode: contentCtvCode,
   } = normalizeLifetimeQrTransferContent(input.transferContent);
   const rewardType = input.rewardType ?? contentRewardType;
   assertRewardType(rewardType);
+  const ctvRef = await resolveCtvRefSnapshot(contentCtvCode ?? input.ctvCode);
 
   if (rewardType !== contentRewardType) {
     throw new PaymentValidationError(
@@ -1840,6 +1858,7 @@ export async function createLifetimeBankQr(input: {
   const lifetimeQr: LifetimeBankQrDocument = {
     status: "active",
     litmatchId,
+    ...(ctvRef ? { ctvRef } : {}),
     verifiedUser: {
       ...verifiedUser,
       verifiedAt: now,
@@ -1896,11 +1915,13 @@ export async function createCardPayment(input: {
   cardDenomination?: unknown;
   cardCode?: unknown;
   cardSerial?: unknown;
+  ctvCode?: unknown;
 }) {
   const config = await getRuntimeConfig();
   const litmatchId = normalizePaymentLitmatchId(input.litmatchId);
   const rewardType = input.rewardType;
   assertRewardType(rewardType);
+  const ctvRef = await resolveCtvRefSnapshot(input.ctvCode);
 
   const cardProvider = normalizeCardProvider(input.cardProvider);
   const cardDenomination = normalizeCardDenomination(input.cardDenomination);
@@ -1935,6 +1956,7 @@ export async function createCardPayment(input: {
     const payment: CardPaymentDocument = {
       status: "processing",
       litmatchId,
+      ...(ctvRef ? { ctvRef } : {}),
       verifiedUser: {
         ...verifiedUser,
         verifiedAt: now,
@@ -3032,6 +3054,7 @@ async function createLifetimeBankPaymentFromSePay(
     mode: "lifetime",
     status: "paid",
     litmatchId: lifetimeQr.litmatchId,
+    ...(lifetimeQr.ctvRef ? { ctvRef: lifetimeQr.ctvRef } : {}),
     verifiedUser: lifetimeQr.verifiedUser,
     amount: transferAmount,
     rewardType: lifetimeQr.rewardType,
@@ -3090,6 +3113,7 @@ async function createDirectLifetimeBankPaymentFromSePay(
   );
   const paidAt = new Date();
   const bankPayments = await getCollection<BankPaymentDocument>("bank_payments");
+  const ctvRef = await resolveCtvRefSnapshot(lifetimeQrContent.ctvCode);
 
   let verifiedUser: BankPaymentDocument["verifiedUser"];
 
@@ -3110,6 +3134,7 @@ async function createDirectLifetimeBankPaymentFromSePay(
       mode: "lifetime",
       status: "recharge_failed",
       litmatchId: lifetimeQrContent.litmatchId,
+      ...(ctvRef ? { ctvRef } : {}),
       amount: transferAmount,
       rewardType: lifetimeQrContent.rewardType,
       rewardAmount,
@@ -3157,6 +3182,7 @@ async function createDirectLifetimeBankPaymentFromSePay(
     mode: "lifetime",
     status: "paid",
     litmatchId: lifetimeQrContent.litmatchId,
+    ...(ctvRef ? { ctvRef } : {}),
     verifiedUser,
     amount: transferAmount,
     rewardType: lifetimeQrContent.rewardType,

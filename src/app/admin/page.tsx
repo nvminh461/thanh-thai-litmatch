@@ -8,6 +8,7 @@ import {
   listBankPayments,
   listCardPayments,
 } from "@/server/payment-repository";
+import { listCtvs } from "@/server/ctv-repository";
 import { getRuntimeConfig } from "@/server/runtime-config";
 import AdminDashboard from "./admin-dashboard";
 
@@ -27,6 +28,7 @@ export default async function AdminPage() {
     lifetimeQrReport,
     directRecharges,
     bankQrBlacklist,
+    ctvs,
   ] =
     await Promise.all([
       getRuntimeConfig(),
@@ -35,6 +37,7 @@ export default async function AdminPage() {
       getLifetimeQrReport(),
       listDirectAdminRecharges(),
       listBankQrBlacklist(),
+      listCtvs(),
     ]);
 
   return (
@@ -46,6 +49,7 @@ export default async function AdminPage() {
       lifetimeQrReport={lifetimeQrReport}
       directRecharges={directRecharges}
       bankQrBlacklist={bankQrBlacklist}
+      ctvs={ctvs}
     />
   );
 }
