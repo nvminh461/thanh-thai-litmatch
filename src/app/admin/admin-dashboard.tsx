@@ -20,12 +20,15 @@ import type {
   AdminRuntimeConfigForm,
 } from "@/lib/admin-types";
 import { buildLitmatchAvatarUrl } from "@/lib/litmatch-avatar";
+import type { AdminSection } from "@/lib/admin-navigation";
 import type { RewardType } from "@/lib/payment-config";
+import AdminSidebar from "./admin-sidebar";
 import CtvAdminPanel from "./ctv-admin-panel";
 import styles from "./admin.module.css";
 
 type AdminDashboardProps = {
   username: string;
+  initialSection: AdminSection;
   initialConfig: AdminRuntimeConfigForm;
   bankPayments: AdminPaginatedBankPayments;
   cardPayments: AdminPaginatedCardPayments;
@@ -58,14 +61,6 @@ type SaveSettingsResponse = {
   error?: string;
 };
 
-type AdminSection =
-  | "bank"
-  | "card"
-  | "direct"
-  | "blacklist"
-  | "report"
-  | "ctv"
-  | "settings";
 type StatusFilter = "all" | AdminPaymentStatus;
 type DirectStatusFilter = "all" | AdminDirectRechargeRow["status"];
 type BlacklistStatusFilter = "all" | AdminBankQrBlacklistStatus;
@@ -513,6 +508,7 @@ function DateFilterField({
 
 export default function AdminDashboard({
   username,
+  initialSection,
   initialConfig,
   bankPayments,
   cardPayments,
@@ -527,7 +523,6 @@ export default function AdminDashboard({
   const [saveMessage, setSaveMessage] = useState("");
   const [saveError, setSaveError] = useState("");
   const [saving, setSaving] = useState(false);
-  const [activeSection, setActiveSection] = useState<AdminSection>("bank");
   const [bankPageData, setBankPageData] = useState(bankPayments);
   const [cardPageData, setCardPageData] = useState(cardPayments);
   const [reportData, setReportData] = useState(lifetimeQrReport);
@@ -1726,97 +1721,24 @@ export default function AdminDashboard({
 
   return (
     <main className={styles.adminPage}>
-      <aside className={styles.sidebar} aria-label="Điều hướng quản trị">
-        <div className={styles.sidebarBrand}>
-          <p className={styles.kicker}>Quản trị Thành Thái</p>
-          <strong>Admin</strong>
-          <span>{username}</span>
-        </div>
-
-        <nav className={styles.sidebarNav}>
-          <button
-            className={`${styles.sidebarButton} ${
-              activeSection === "bank" ? styles.sidebarButtonActive : ""
-            }`}
-            type="button"
-            onClick={() => setActiveSection("bank")}
-          >
-            <span>Giao dịch chuyển khoản</span>
-            <small>{formatNumber(bankPageData.total)}</small>
-          </button>
-          <button
-            className={`${styles.sidebarButton} ${
-              activeSection === "card" ? styles.sidebarButtonActive : ""
-            }`}
-            type="button"
-            onClick={() => setActiveSection("card")}
-          >
-            <span>Giao dịch nạp thẻ</span>
-            <small>{formatNumber(cardPageData.total)}</small>
-          </button>
-          <button
-            className={`${styles.sidebarButton} ${
-              activeSection === "direct" ? styles.sidebarButtonActive : ""
-            }`}
-            type="button"
-            onClick={() => setActiveSection("direct")}
-          >
-            <span>Nạp trực tiếp</span>
-            <small>{formatNumber(directPageData.total)}</small>
-          </button>
-          <button
-            className={`${styles.sidebarButton} ${
-              activeSection === "blacklist" ? styles.sidebarButtonActive : ""
-            }`}
-            type="button"
-            onClick={() => setActiveSection("blacklist")}
-          >
-            <span>Danh sách đen giao dịch</span>
-            <small>{formatNumber(blacklistPageData.total)}</small>
-          </button>
-          <button
-            className={`${styles.sidebarButton} ${
-              activeSection === "report" ? styles.sidebarButtonActive : ""
-            }`}
-            type="button"
-            onClick={() => setActiveSection("report")}
-          >
-            <span>Báo cáo thống kê</span>
-            <small>{formatNumber(reportData.summary.paymentCount)}</small>
-          </button>
-          <button
-            className={`${styles.sidebarButton} ${
-              activeSection === "ctv" ? styles.sidebarButtonActive : ""
-            }`}
-            type="button"
-            onClick={() => setActiveSection("ctv")}
-          >
-            <span>Quản lý CTV</span>
-            <small>{formatNumber(ctvs.total)}</small>
-          </button>
-          <button
-            className={`${styles.sidebarButton} ${
-              activeSection === "settings" ? styles.sidebarButtonActive : ""
-            }`}
-            type="button"
-            onClick={() => setActiveSection("settings")}
-          >
-            <span>Cấu hình hệ thống</span>
-          </button>
-        </nav>
-
-        <form action="/api/admin/logout" method="post">
-          <button className={styles.secondaryButton} type="submit">
-            Đăng xuất
-          </button>
-        </form>
-      </aside>
+      <AdminSidebar
+        username={username}
+        activeSection={initialSection}
+        counts={{
+          bank: bankPageData.total,
+          card: cardPageData.total,
+          direct: directPageData.total,
+          blacklist: blacklistPageData.total,
+          report: reportData.summary.paymentCount,
+          ctvs: ctvs.total,
+        }}
+      />
 
       <div className={styles.adminContent}>
         <header className={styles.header}>
           <div>
             <p className={styles.kicker}>Bảng điều khiển</p>
-            <h1>{sectionTitle(activeSection)}</h1>
+            <h1>{sectionTitle(initialSection)}</h1>
             <p>Quản lý cấu hình và theo dõi giao dịch mới nhất.</p>
           </div>
         </header>
@@ -1832,7 +1754,7 @@ export default function AdminDashboard({
           </p>
         ) : null}
 
-        {activeSection === "settings" ? (
+        {initialSection === "settings" ? (
           <section className={styles.panel} aria-labelledby="settings-title">
             <div className={styles.panelHeader}>
               <div>
@@ -2025,9 +1947,9 @@ export default function AdminDashboard({
           </section>
         ) : null}
 
-        {activeSection === "ctv" ? <CtvAdminPanel initialCtvs={ctvs} /> : null}
+        {initialSection === "ctv" ? <CtvAdminPanel initialCtvs={ctvs} /> : null}
 
-        {activeSection === "bank" ? (
+        {initialSection === "bank" ? (
           <section
             className={styles.panel}
             aria-labelledby="bank-payments-title"
@@ -2370,7 +2292,7 @@ export default function AdminDashboard({
           </section>
         ) : null}
 
-        {activeSection === "direct" ? (
+        {initialSection === "direct" ? (
           <section
             className={styles.panel}
             aria-labelledby="direct-recharge-title"
@@ -2707,7 +2629,7 @@ export default function AdminDashboard({
           </section>
         ) : null}
 
-        {activeSection === "blacklist" ? (
+        {initialSection === "blacklist" ? (
           <section
             className={styles.panel}
             aria-labelledby="bank-qr-blacklist-title"
@@ -2894,7 +2816,7 @@ export default function AdminDashboard({
           </section>
         ) : null}
 
-        {activeSection === "report" ? (
+        {initialSection === "report" ? (
           <section
             className={styles.panel}
             aria-labelledby="lifetime-qr-report-title"
@@ -3150,7 +3072,7 @@ export default function AdminDashboard({
           </section>
         ) : null}
 
-        {activeSection === "card" ? (
+        {initialSection === "card" ? (
           <section
             className={styles.panel}
             aria-labelledby="card-payments-title"

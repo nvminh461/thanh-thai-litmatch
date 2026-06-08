@@ -151,6 +151,13 @@
   opacity: 0.55;
 }
 
+a.secondaryButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+
 .sidebar {
   position: sticky;
   top: 18px;
@@ -206,6 +213,10 @@
   font-weight: 800;
   padding: 10px 12px;
   text-align: left;
+}
+
+a.sidebarButton {
+  text-decoration: none;
 }
 
 .sidebarButton span {
@@ -690,6 +701,12 @@
   font-size: 12px;
   font-weight: 800;
   padding: 0 10px;
+}
+
+a.inlineActionButton {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
 }
 
 .inlineActions {

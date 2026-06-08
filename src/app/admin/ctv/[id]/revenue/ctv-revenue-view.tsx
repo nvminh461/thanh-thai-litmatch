@@ -1,15 +1,21 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
+import type { AdminNavCounts } from "@/lib/admin-navigation";
+import { adminSectionHref } from "@/lib/admin-navigation";
 import type {
+  AdminCtvRow,
   AdminCtvTransactionRow,
   AdminPaginatedCtvTransactions,
 } from "@/lib/admin-types";
-import type { CtvSessionProfile } from "@/server/ctv-repository";
-import styles from "../admin/admin.module.css";
+import AdminSidebar from "../../../admin-sidebar";
+import styles from "../../../admin.module.css";
 
-type CtvDashboardProps = {
-  profile: CtvSessionProfile;
+type CtvRevenueViewProps = {
+  username: string;
+  navCounts: AdminNavCounts;
+  ctv: AdminCtvRow;
   initialTransactions: AdminPaginatedCtvTransactions;
 };
 
@@ -21,20 +27,9 @@ type TransactionFilters = {
   updatedTo: string;
 };
 
-type PasswordFormState = {
-  currentPassword: string;
-  nextPassword: string;
-  confirmPassword: string;
-};
-
-type TransactionsResponse = {
+type CtvTransactionsResponse = {
   success: boolean;
   data?: AdminPaginatedCtvTransactions;
-  error?: string;
-};
-
-type PasswordResponse = {
-  success: boolean;
   error?: string;
 };
 
@@ -115,41 +110,18 @@ function buildRefPath(code: string) {
   return `/?ctv=${encodeURIComponent(code)}`;
 }
 
-function buildRefUrl(code: string) {
-  if (typeof window === "undefined") {
-    return buildRefPath(code);
-  }
-
-  const url = new URL("/", window.location.origin);
-  url.searchParams.set("ctv", code);
-
-  return url.toString();
-}
-
-function emptyPasswordForm(): PasswordFormState {
-  return {
-    currentPassword: "",
-    nextPassword: "",
-    confirmPassword: "",
-  };
-}
-
-export default function CtvDashboard({
-  profile,
+export default function CtvRevenueView({
+  username,
+  navCounts,
+  ctv,
   initialTransactions,
-}: CtvDashboardProps) {
+}: CtvRevenueViewProps) {
   const [transactions, setTransactions] = useState(initialTransactions);
   const [filters, setFilters] = useState<TransactionFilters>(emptyFilters);
   const [appliedFilters, setAppliedFilters] =
     useState<TransactionFilters>(emptyFilters);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [copied, setCopied] = useState(false);
-  const [passwordForm, setPasswordForm] =
-    useState<PasswordFormState>(emptyPasswordForm);
-  const [passwordLoading, setPasswordLoading] = useState(false);
-  const [passwordMessage, setPasswordMessage] = useState("");
-  const [passwordError, setPasswordError] = useState("");
 
   async function fetchTransactions(
     page = transactions.page,
@@ -167,29 +139,21 @@ export default function CtvDashboard({
         updatedFrom: nextFilters.updatedFrom,
         updatedTo: nextFilters.updatedTo,
       });
-      const response = await fetch(`/api/ctv/transactions?${params.toString()}`);
-      const payload = (await response.json()) as TransactionsResponse;
+      const response = await fetch(
+        `/api/admin/ctvs/${ctv.id}/transactions?${params.toString()}`,
+      );
+      const payload = (await response.json()) as CtvTransactionsResponse;
 
       if (!response.ok || !payload.success || !payload.data) {
-        setError(payload.error ?? "Không tải được giao dịch.");
+        setError(payload.error ?? "Không tải được giao dịch CTV.");
         return;
       }
 
       setTransactions(payload.data);
     } catch {
-      setError("Không tải được giao dịch.");
+      setError("Không tải được giao dịch CTV.");
     } finally {
       setLoading(false);
-    }
-  }
-
-  async function copyRef() {
-    try {
-      await navigator.clipboard.writeText(buildRefUrl(profile.code));
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1600);
-    } catch {
-      setCopied(false);
     }
   }
 
@@ -199,168 +163,37 @@ export default function CtvDashboard({
   }
 
   function clearFilters() {
-    const nextFilters = emptyFilters();
-    setFilters(nextFilters);
-    setAppliedFilters(nextFilters);
-    fetchTransactions(1, nextFilters);
-  }
-
-  async function changePassword() {
-    setPasswordMessage("");
-    setPasswordError("");
-
-    if (passwordForm.nextPassword !== passwordForm.confirmPassword) {
-      setPasswordError("Mật khẩu mới nhập lại không khớp.");
-      return;
-    }
-
-    setPasswordLoading(true);
-
-    try {
-      const response = await fetch("/api/ctv/password", {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          currentPassword: passwordForm.currentPassword,
-          nextPassword: passwordForm.nextPassword,
-        }),
-      });
-      const payload = (await response.json()) as PasswordResponse;
-
-      if (!response.ok || !payload.success) {
-        setPasswordError(payload.error ?? "Không đổi được mật khẩu.");
-        return;
-      }
-
-      setPasswordForm(emptyPasswordForm());
-      setPasswordMessage("Đã đổi mật khẩu.");
-    } catch {
-      setPasswordError("Không đổi được mật khẩu.");
-    } finally {
-      setPasswordLoading(false);
-    }
+    const empty = emptyFilters();
+    setFilters(empty);
+    setAppliedFilters(empty);
+    fetchTransactions(1, empty);
   }
 
   return (
     <main className={styles.adminPage}>
-      <aside className={styles.sidebar} aria-label="Thông tin CTV">
-        <div className={styles.sidebarBrand}>
-          <p className={styles.kicker}>CTV Thành Thái</p>
-          <strong>{profile.name}</strong>
-          <span>{profile.username}</span>
-        </div>
-        <button className={styles.secondaryButton} type="button" onClick={copyRef}>
-          {copied ? "Đã chép link" : "Copy link ref"}
-        </button>
-        <form action="/api/ctv/logout" method="post">
-          <button className={styles.secondaryButton} type="submit">
-            Đăng xuất
-          </button>
-        </form>
-      </aside>
+      <AdminSidebar
+        username={username}
+        activeSection="ctv"
+        counts={navCounts}
+      />
 
       <div className={styles.adminContent}>
         <header className={styles.header}>
           <div>
-            <p className={styles.kicker}>Thống kê CTV</p>
-            <h1>Doanh thu của bạn</h1>
-            <p className={styles.refLine}>{buildRefPath(profile.code)}</p>
+            <p className={styles.kicker}>Doanh thu CTV</p>
+            <h1>{ctv.name}</h1>
+            <p>
+              Code ref: <strong>{ctv.code}</strong> · Link:{" "}
+              <strong>{buildRefPath(ctv.code)}</strong> · Ghi chú nạp trực tiếp
+              dùng code <strong>{ctv.code}</strong>
+            </p>
           </div>
+          <Link className={styles.secondaryButton} href={adminSectionHref("ctv")}>
+            Quay lại quản lý CTV
+          </Link>
         </header>
 
-        <section className={styles.panel} aria-labelledby="ctv-password-title">
-          <div className={styles.panelHeader}>
-            <div>
-              <h2 id="ctv-password-title">Tài khoản CTV</h2>
-              <p>Đổi mật khẩu đăng nhập thống kê.</p>
-            </div>
-          </div>
-
-          <form
-            className={styles.directRechargeForm}
-            onSubmit={(event) => {
-              event.preventDefault();
-              changePassword();
-            }}
-          >
-            <label className={styles.field}>
-              <span>Mật khẩu hiện tại</span>
-              <input
-                autoComplete="current-password"
-                type="password"
-                value={passwordForm.currentPassword}
-                onChange={(event) =>
-                  setPasswordForm((current) => ({
-                    ...current,
-                    currentPassword: event.target.value,
-                  }))
-                }
-              />
-            </label>
-            <label className={styles.field}>
-              <span>Mật khẩu mới</span>
-              <input
-                autoComplete="new-password"
-                type="password"
-                value={passwordForm.nextPassword}
-                onChange={(event) =>
-                  setPasswordForm((current) => ({
-                    ...current,
-                    nextPassword: event.target.value,
-                  }))
-                }
-              />
-            </label>
-            <label className={styles.field}>
-              <span>Nhập lại mật khẩu mới</span>
-              <input
-                autoComplete="new-password"
-                type="password"
-                value={passwordForm.confirmPassword}
-                onChange={(event) =>
-                  setPasswordForm((current) => ({
-                    ...current,
-                    confirmPassword: event.target.value,
-                  }))
-                }
-              />
-            </label>
-
-            {passwordError ? (
-              <p className={styles.errorText} role="alert">
-                {passwordError}
-              </p>
-            ) : null}
-            {passwordMessage ? (
-              <p className={styles.successText} role="status">
-                {passwordMessage}
-              </p>
-            ) : null}
-
-            <div className={styles.formActions}>
-              <button
-                className={styles.primaryButton}
-                type="submit"
-                disabled={passwordLoading}
-              >
-                {passwordLoading ? "Đang đổi..." : "Đổi mật khẩu"}
-              </button>
-            </div>
-          </form>
-        </section>
-
-        <section className={styles.panel} aria-labelledby="ctv-dashboard-title">
-          <div className={styles.panelHeader}>
-            <div>
-              <h2 id="ctv-dashboard-title">Giao dịch CTV</h2>
-              <p>
-                Gồm giao dịch qua link ref và nạp trực tiếp được ghi chú bằng
-                code {profile.code}. Doanh thu tính theo số tiền khách đã thanh
-                toán.
-              </p>
-            </div>
-          </div>
-
+        <section className={styles.panel} aria-labelledby="ctv-revenue-summary">
           <div className={styles.summaryGrid}>
             <div className={styles.summaryItem}>
               <span>Doanh thu</span>
@@ -370,19 +203,36 @@ export default function CtvDashboard({
             </div>
             <div className={styles.summaryItem}>
               <span>Tổng giao dịch</span>
-              <strong>{formatNumber(transactions.summary.transactionCount)}</strong>
+              <strong>
+                {formatNumber(transactions.summary.transactionCount)}
+              </strong>
             </div>
             <div className={styles.summaryItem}>
               <span>Đã nạp</span>
-              <strong>{formatNumber(transactions.summary.completedCount)}</strong>
+              <strong>
+                {formatNumber(transactions.summary.completedCount)}
+              </strong>
             </div>
             <div className={styles.summaryItem}>
               <span>Kim cương</span>
-              <strong>{formatNumber(transactions.summary.diamondRewardAmount)}</strong>
+              <strong>
+                {formatNumber(transactions.summary.diamondRewardAmount)}
+              </strong>
             </div>
             <div className={styles.summaryItem}>
               <span>Sao</span>
-              <strong>{formatNumber(transactions.summary.starRewardAmount)}</strong>
+              <strong>
+                {formatNumber(transactions.summary.starRewardAmount)}
+              </strong>
+            </div>
+          </div>
+        </section>
+
+        <section className={styles.panel} aria-labelledby="ctv-revenue-list">
+          <div className={styles.panelHeader}>
+            <div>
+              <h2 id="ctv-revenue-list">Danh sách giao dịch</h2>
+              <p>Doanh thu tính theo số tiền khách đã thanh toán thành công.</p>
             </div>
           </div>
 
@@ -521,8 +371,7 @@ export default function CtvDashboard({
                         {formatNumber(row.revenueAmount)} đ
                       </td>
                       <td data-label="Thực nhận">
-                        {formatNumber(row.rewardAmount)}{" "}
-                        {rewardLabel(row.rewardType)}
+                        {formatNumber(row.rewardAmount)}
                       </td>
                       <td
                         data-label="Mã/Nội dung"
@@ -540,7 +389,7 @@ export default function CtvDashboard({
                     <td colSpan={8} className={styles.emptyCell}>
                       {loading
                         ? "Đang tải giao dịch..."
-                        : "Chưa có giao dịch phù hợp."}
+                        : "Không có giao dịch phù hợp."}
                     </td>
                   </tr>
                 )}
@@ -557,13 +406,17 @@ export default function CtvDashboard({
               <button
                 type="button"
                 disabled={transactions.page <= 1 || loading}
-                onClick={() => fetchTransactions(Math.max(1, transactions.page - 1))}
+                onClick={() =>
+                  fetchTransactions(Math.max(1, transactions.page - 1))
+                }
               >
                 Trước
               </button>
               <button
                 type="button"
-                disabled={transactions.page >= transactions.totalPages || loading}
+                disabled={
+                  transactions.page >= transactions.totalPages || loading
+                }
                 onClick={() =>
                   fetchTransactions(
                     Math.min(transactions.totalPages, transactions.page + 1),

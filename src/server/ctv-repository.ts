@@ -13,8 +13,10 @@ import type {
   AdminPaymentStatus,
 } from "@/lib/admin-types";
 import type { RewardType } from "@/lib/payment-config";
+import { calculatePaymentAmountFromReward } from "@/lib/payment-config";
 import { timingSafeEqualString } from "./crypto-utils";
 import { getCollection } from "./mongo";
+import { getRuntimeConfig } from "./runtime-config";
 
 const scrypt = promisify(scryptCallback);
 const CTV_PAGE_SIZE = 20;
@@ -86,9 +88,14 @@ type CtvPaymentRefDocument = {
 type CtvBankPaymentDocument = CtvPaymentRefDocument & {
   _id?: ObjectId;
   mode?: AdminBankPaymentMode;
-  amount: number;
+  amount?: number;
   transferContent: string;
   paidAt?: Date;
+  note?: string;
+  sepay?: {
+    transferAmount?: number;
+    content?: string;
+  };
 };
 
 type CtvCardPaymentDocument = CtvPaymentRefDocument & {
@@ -99,6 +106,8 @@ type CtvCardPaymentDocument = CtvPaymentRefDocument & {
   declaredValue?: number;
   actualValue?: number;
   providerAmount?: number;
+  providerStatus?: number;
+  note?: string;
 };
 
 type CtvDirectRechargeDocument = {
@@ -182,6 +191,12 @@ function stripVietnameseMarks(value: string) {
 }
 
 export function generateCtvCodeFromName(name: string) {
+  const firstPart = name.trim().split(/\s+/).filter(Boolean)[0] ?? "";
+
+  return stripVietnameseMarks(firstPart).toUpperCase().replace(/[^A-Z0-9]/g, "");
+}
+
+function getLegacyCtvCodeFromName(name: string) {
   return stripVietnameseMarks(name).toUpperCase().replace(/[^A-Z0-9]/g, "");
 }
 
@@ -189,6 +204,73 @@ export function normalizeCtvCode(value: unknown) {
   const rawValue = typeof value === "string" ? value : "";
 
   return stripVietnameseMarks(rawValue).toUpperCase().replace(/[^A-Z0-9]/g, "");
+}
+
+function getCtvContentTokens(ctv: Pick<CtvDocument, "code" | "name">) {
+  const tokens = new Set<string>([ctv.code]);
+  const legacyCode = getLegacyCtvCodeFromName(ctv.name);
+
+  if (legacyCode) {
+    tokens.add(legacyCode);
+  }
+
+  for (const part of ctv.name.trim().split(/\s+/).filter(Boolean)) {
+    const normalized = normalizeCtvCode(part);
+
+    if (normalized) {
+      tokens.add(normalized);
+    }
+  }
+
+  return [...tokens];
+}
+
+function buildCtvTokenPattern(tokens: string[]) {
+  return tokens.map((token) => escapeRegex(token)).join("|");
+}
+
+function buildLifetimeTransferContentRegex(tokens: string[]) {
+  return `^(LMKC|LMSAO) (${buildCtvTokenPattern(tokens)}) \\d{5,20}$`;
+}
+
+function buildLifetimeTransferContentInTextRegex(tokens: string[]) {
+  return `(LMKC|LMSAO)[\\s]+(${buildCtvTokenPattern(tokens)})[\\s]+\\d{5,20}`;
+}
+
+function buildCtvNoteRegex(tokens: string[]) {
+  return `^(${buildCtvTokenPattern(tokens)})$`;
+}
+
+function buildCtvAttributionOrConditions(
+  ctvId: ObjectId,
+  ctv: Pick<CtvDocument, "code" | "name">,
+) {
+  const tokens = getCtvContentTokens(ctv);
+  const lifetimeTransferRegex = buildLifetimeTransferContentRegex(tokens);
+  const lifetimeInTextRegex = buildLifetimeTransferContentInTextRegex(tokens);
+  const noteRegex = buildCtvNoteRegex(tokens);
+
+  return [
+    { "ctvRef.ctvId": ctvId },
+    {
+      transferContent: {
+        $regex: lifetimeTransferRegex,
+        $options: "i",
+      },
+    },
+    {
+      "sepay.content": {
+        $regex: lifetimeInTextRegex,
+        $options: "i",
+      },
+    },
+    {
+      note: {
+        $regex: noteRegex,
+        $options: "i",
+      },
+    },
+  ];
 }
 
 async function hashPassword(password: string, salt: string) {
@@ -266,6 +348,21 @@ async function assertUniqueUsername(username: string, currentId?: ObjectId) {
   if (existing) {
     throw new CtvValidationError("Tài khoản CTV đã tồn tại.");
   }
+}
+
+export async function getCtvById(id: string): Promise<AdminCtvRow | null> {
+  if (!ObjectId.isValid(id)) {
+    return null;
+  }
+
+  const collection = await getCollection<CtvDocument>("ctvs");
+  const ctv = await collection.findOne({ _id: new ObjectId(id) });
+
+  if (!ctv) {
+    return null;
+  }
+
+  return serializeCtv(ctv);
 }
 
 export async function listCtvs(input: {
@@ -373,9 +470,22 @@ export async function updateCtv(input: {
   const nextPassword = normalizeOptionalString(input.password);
 
   if (nextName) {
+    const nextCode = generateCtvCodeFromName(nextName);
+
+    if (!nextCode) {
+      throw new CtvValidationError(
+        "Tên CTV không sinh được code. Vui lòng nhập tên có chữ hoặc số.",
+      );
+    }
+
+    if (nextCode !== existing.code) {
+      await assertUniqueCode(nextCode, ctvId);
+    }
+
     update.$set = {
       ...update.$set,
       name: nextName,
+      code: nextCode,
     };
   }
 
@@ -442,6 +552,32 @@ export async function disableCtvLogin(input: {
   return serializeCtv(updated);
 }
 
+export async function enableCtvLogin(input: {
+  id?: unknown;
+}): Promise<AdminCtvRow> {
+  const ctvId = normalizeCtvObjectId(input.id);
+  const collection = await getCollection<CtvDocument>("ctvs");
+  const updated = await collection.findOneAndUpdate(
+    { _id: ctvId },
+    {
+      $unset: {
+        loginDisabledAt: "",
+        deletedAt: "",
+      },
+      $set: {
+        updatedAt: new Date(),
+      },
+    },
+    { returnDocument: "after" },
+  );
+
+  if (!updated) {
+    throw new CtvNotFoundError();
+  }
+
+  return serializeCtv(updated);
+}
+
 export async function resolveCtvRefSnapshot(
   codeValue: unknown,
 ): Promise<CtvRefSnapshot | null> {
@@ -452,9 +588,22 @@ export async function resolveCtvRefSnapshot(
   }
 
   const collection = await getCollection<CtvDocument>("ctvs");
-  const ctv = await collection.findOne({ code });
+  const exactMatch = await collection.findOne({ code });
 
-  return ctv ? toCtvRefSnapshot(ctv) : null;
+  if (exactMatch) {
+    return toCtvRefSnapshot(exactMatch);
+  }
+
+  const ctvs = await collection.find({}).toArray();
+  const prefixMatches = ctvs.filter(
+    (ctv) => ctv.code.startsWith(code) || code.startsWith(ctv.code),
+  );
+
+  if (prefixMatches.length === 1) {
+    return toCtvRefSnapshot(prefixMatches[0]);
+  }
+
+  return null;
 }
 
 export async function verifyCtvCredentials(username: string, password: string) {
@@ -610,9 +759,10 @@ function shouldQueryDirectTransactions(
 function buildCtvPaymentFilter<TDocument extends CtvPaymentRefDocument>(
   input: CtvTransactionListInput,
   ctvId: ObjectId,
+  ctv: Pick<CtvDocument, "code" | "name">,
 ): Filter<TDocument> {
   const filter: Filter<TDocument> = {
-    "ctvRef.ctvId": ctvId,
+    $or: buildCtvAttributionOrConditions(ctvId, ctv),
   } as unknown as Filter<TDocument>;
 
   if (isPaymentStatus(input.status)) {
@@ -642,11 +792,12 @@ function buildCtvPaymentFilter<TDocument extends CtvPaymentRefDocument>(
 
 function buildCtvDirectRechargeFilter(
   input: CtvTransactionListInput,
-  ctvCode: string,
+  ctv: Pick<CtvDocument, "code" | "name">,
 ): Filter<CtvDirectRechargeDocument> {
+  const tokens = getCtvContentTokens(ctv);
   const filter: Filter<CtvDirectRechargeDocument> = {
     note: {
-      $regex: `^${escapeRegex(ctvCode)}$`,
+      $regex: buildCtvNoteRegex(tokens),
       $options: "i",
     },
   };
@@ -676,18 +827,70 @@ function buildCtvDirectRechargeFilter(
   return filter;
 }
 
+function normalizeMoney(value: unknown) {
+  const amount = typeof value === "number" ? value : Number(value);
+
+  return Number.isFinite(amount) ? amount : 0;
+}
+
+function getBankPaymentAmount(payment: CtvBankPaymentDocument) {
+  const amount = normalizeMoney(payment.amount);
+
+  if (amount > 0) {
+    return amount;
+  }
+
+  return normalizeMoney(payment.sepay?.transferAmount);
+}
+
 function getCardRevenueAmount(payment: CtvCardPaymentDocument) {
-  return (
+  return normalizeMoney(
     payment.actualValue ??
-    payment.providerAmount ??
-    payment.declaredValue ??
-    payment.cardDenomination
+      payment.providerAmount ??
+      payment.declaredValue ??
+      payment.cardDenomination,
   );
+}
+
+function isBankRevenueEligible(payment: CtvBankPaymentDocument) {
+  const amount = getBankPaymentAmount(payment);
+
+  if (amount <= 0) {
+    return false;
+  }
+
+  if (payment.status === "completed") {
+    return true;
+  }
+
+  if (payment.status === "paid" || payment.status === "recharge_failed") {
+    return Boolean(payment.paidAt || payment.sepay);
+  }
+
+  return false;
+}
+
+function isCardRevenueEligible(payment: CtvCardPaymentDocument) {
+  if (
+    payment.status !== "paid" &&
+    payment.status !== "completed" &&
+    payment.status !== "recharge_failed"
+  ) {
+    return false;
+  }
+
+  if (getCardRevenueAmount(payment) <= 0) {
+    return false;
+  }
+
+  return payment.providerStatus === 1 || payment.status === "completed";
 }
 
 function serializeBankTransaction(
   payment: CtvBankPaymentDocument,
 ): AdminCtvTransactionRow {
+  const amount = getBankPaymentAmount(payment);
+
   return {
     id: payment._id?.toString() ?? "",
     type: "bank",
@@ -695,9 +898,9 @@ function serializeBankTransaction(
     status: payment.status,
     litmatchId: payment.litmatchId,
     rewardType: payment.rewardType,
-    amount: payment.amount,
-    revenueAmount: payment.status === "completed" ? payment.amount : 0,
-    rewardAmount: payment.rewardAmount,
+    amount,
+    revenueAmount: isBankRevenueEligible(payment) ? amount : 0,
+    rewardAmount: normalizeMoney(payment.rewardAmount),
     transferContent: payment.transferContent,
     requestId: null,
     cardProvider: null,
@@ -721,8 +924,8 @@ function serializeCardTransaction(
     litmatchId: payment.litmatchId,
     rewardType: payment.rewardType,
     amount,
-    revenueAmount: payment.status === "completed" ? amount : 0,
-    rewardAmount: payment.rewardAmount,
+    revenueAmount: isCardRevenueEligible(payment) ? amount : 0,
+    rewardAmount: normalizeMoney(payment.rewardAmount),
     transferContent: null,
     requestId: payment.requestId ?? null,
     cardProvider: payment.cardProvider,
@@ -735,7 +938,18 @@ function serializeCardTransaction(
 
 function serializeDirectTransaction(
   recharge: CtvDirectRechargeDocument,
+  bankRate: Parameters<typeof calculatePaymentAmountFromReward>[2],
 ): AdminCtvTransactionRow {
+  const rewardAmount = normalizeMoney(recharge.rewardAmount);
+  const amount =
+    recharge.status === "completed"
+      ? calculatePaymentAmountFromReward(
+          rewardAmount,
+          recharge.rewardType,
+          bankRate,
+        )
+      : 0;
+
   return {
     id: recharge._id?.toString() ?? "",
     type: "direct",
@@ -743,9 +957,9 @@ function serializeDirectTransaction(
     status: recharge.status,
     litmatchId: recharge.litmatchId,
     rewardType: recharge.rewardType,
-    amount: 0,
-    revenueAmount: 0,
-    rewardAmount: recharge.rewardAmount,
+    amount,
+    revenueAmount: amount,
+    rewardAmount,
     transferContent: recharge.note ?? null,
     requestId: null,
     cardProvider: null,
@@ -768,12 +982,12 @@ function summarizeCtvTransactions(
         completedCount: current.completedCount + (isCompleted ? 1 : 0),
         bankCompletedRevenue:
           current.bankCompletedRevenue +
-          (isCompleted && row.type === "bank" ? row.revenueAmount : 0),
+          (row.type === "bank" ? row.revenueAmount : 0),
         cardCompletedRevenue:
           current.cardCompletedRevenue +
-          (isCompleted && row.type === "card" ? row.revenueAmount : 0),
+          (row.type === "card" ? row.revenueAmount : 0),
         totalCompletedRevenue:
-          current.totalCompletedRevenue + (isCompleted ? row.revenueAmount : 0),
+          current.totalCompletedRevenue + row.revenueAmount,
         totalRewardAmount:
           current.totalRewardAmount + (isCompleted ? row.rewardAmount : 0),
         diamondRewardAmount:
@@ -808,8 +1022,12 @@ export async function listCtvTransactions(
   const page = normalizeListPage(input.page);
   const pageSize = normalizeListPageSize(input.pageSize);
   const rows: AdminCtvTransactionRow[] = [];
-  const ctvCollection = await getCollection<CtvDocument>("ctvs");
+  const [ctvCollection, runtimeConfig] = await Promise.all([
+    getCollection<CtvDocument>("ctvs"),
+    getRuntimeConfig(),
+  ]);
   const ctv = await ctvCollection.findOne({ _id: ctvId });
+  const bankRate = runtimeConfig.bankRate;
 
   if (!ctv) {
     throw new CtvNotFoundError();
@@ -824,7 +1042,7 @@ export async function listCtvTransactions(
       "bank_payments",
     );
     const bankRows = await bankPayments
-      .find(buildCtvPaymentFilter<CtvBankPaymentDocument>(input, ctvId))
+      .find(buildCtvPaymentFilter<CtvBankPaymentDocument>(input, ctvId, ctv))
       .toArray();
 
     rows.push(...bankRows.map(serializeBankTransaction));
@@ -839,7 +1057,7 @@ export async function listCtvTransactions(
       "card_payments",
     );
     const cardRows = await cardPayments
-      .find(buildCtvPaymentFilter<CtvCardPaymentDocument>(input, ctvId))
+      .find(buildCtvPaymentFilter<CtvCardPaymentDocument>(input, ctvId, ctv))
       .toArray();
 
     rows.push(...cardRows.map(serializeCardTransaction));
@@ -854,10 +1072,10 @@ export async function listCtvTransactions(
       "admin_direct_recharges",
     );
     const directRows = await directRecharges
-      .find(buildCtvDirectRechargeFilter(input, ctv.code))
+      .find(buildCtvDirectRechargeFilter(input, ctv))
       .toArray();
 
-    rows.push(...directRows.map(serializeDirectTransaction));
+    rows.push(...directRows.map((row) => serializeDirectTransaction(row, bankRate)));
   }
 
   rows.sort(

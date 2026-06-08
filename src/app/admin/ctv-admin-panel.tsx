@@ -1,12 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
-import type {
-  AdminCtvRow,
-  AdminCtvTransactionRow,
-  AdminPaginatedCtvTransactions,
-  AdminPaginatedCtvs,
-} from "@/lib/admin-types";
+import type { AdminCtvRow, AdminPaginatedCtvs } from "@/lib/admin-types";
 import styles from "./admin.module.css";
 
 type CtvAdminPanelProps = {
@@ -20,14 +16,6 @@ type CtvFormState = {
   password: string;
 };
 
-type CtvTransactionFilters = {
-  type: AdminCtvTransactionRow["type"] | "all";
-  status: AdminCtvTransactionRow["status"] | "all";
-  litmatchId: string;
-  updatedFrom: string;
-  updatedTo: string;
-};
-
 type CtvListResponse = {
   success: boolean;
   data?: AdminPaginatedCtvs;
@@ -37,12 +25,6 @@ type CtvListResponse = {
 type CtvMutationResponse = {
   success: boolean;
   data?: AdminCtvRow;
-  error?: string;
-};
-
-type CtvTransactionsResponse = {
-  success: boolean;
-  data?: AdminPaginatedCtvTransactions;
   error?: string;
 };
 
@@ -68,64 +50,6 @@ function emptyCtvForm(): CtvFormState {
     username: "",
     password: "",
   };
-}
-
-function emptyTransactionFilters(): CtvTransactionFilters {
-  return {
-    type: "all",
-    status: "all",
-    litmatchId: "",
-    updatedFrom: "",
-    updatedTo: "",
-  };
-}
-
-function statusLabel(status: AdminCtvTransactionRow["status"]) {
-  if (status === "completed") {
-    return "Đã nạp";
-  }
-
-  if (status === "recharge_failed" || status === "failed") {
-    return "Lỗi nạp";
-  }
-
-  if (status === "processing" || status === "pending") {
-    return "Đang xử lý";
-  }
-
-  return status === "paid" ? "Đã thanh toán" : "Chưa thanh toán";
-}
-
-function statusClassName(status: AdminCtvTransactionRow["status"]) {
-  if (status === "completed") {
-    return styles.statusCompleted;
-  }
-
-  if (status === "recharge_failed" || status === "failed") {
-    return styles.statusFailed;
-  }
-
-  if (status === "processing" || status === "pending") {
-    return styles.statusProcessing;
-  }
-
-  return status === "paid" ? styles.statusPaid : styles.statusIncomplete;
-}
-
-function rewardLabel(value: AdminCtvTransactionRow["rewardType"]) {
-  return value === "diamond" ? "Kim cương" : "Sao";
-}
-
-function transactionTypeLabel(row: AdminCtvTransactionRow) {
-  if (row.type === "card") {
-    return "Nạp thẻ";
-  }
-
-  if (row.type === "direct") {
-    return "Nạp trực tiếp";
-  }
-
-  return row.bankMode === "lifetime" ? "QR trọn đời" : "Chuyển khoản";
 }
 
 function isLocked(ctv: AdminCtvRow) {
@@ -168,16 +92,8 @@ export default function CtvAdminPanel({ initialCtvs }: CtvAdminPanelProps) {
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [lockingId, setLockingId] = useState("");
+  const [unlockingId, setUnlockingId] = useState("");
   const [copiedCode, setCopiedCode] = useState("");
-  const [selectedCtv, setSelectedCtv] = useState<AdminCtvRow | null>(null);
-  const [transactionData, setTransactionData] =
-    useState<AdminPaginatedCtvTransactions | null>(null);
-  const [transactionFilters, setTransactionFilters] =
-    useState<CtvTransactionFilters>(emptyTransactionFilters);
-  const [appliedTransactionFilters, setAppliedTransactionFilters] =
-    useState<CtvTransactionFilters>(emptyTransactionFilters);
-  const [transactionLoading, setTransactionLoading] = useState(false);
-  const [transactionError, setTransactionError] = useState("");
 
   async function reloadCtvs(page = ctvPage) {
     const params = new URLSearchParams({ page: String(page) });
@@ -197,7 +113,6 @@ export default function CtvAdminPanel({ initialCtvs }: CtvAdminPanelProps) {
       ...current,
       rows: current.rows.map((item) => (item.id === row.id ? row : item)),
     }));
-    setSelectedCtv((current) => (current?.id === row.id ? row : current));
   }
 
   async function handleSubmit() {
@@ -292,6 +207,41 @@ export default function CtvAdminPanel({ initialCtvs }: CtvAdminPanelProps) {
     }
   }
 
+  async function unlockCtv(ctv: AdminCtvRow) {
+    if (
+      !window.confirm(
+        "Mở khóa đăng nhập CTV này? CTV sẽ đăng nhập lại trang thống kê được.",
+      )
+    ) {
+      return;
+    }
+
+    setUnlockingId(ctv.id);
+    setError("");
+    setMessage("");
+
+    try {
+      const response = await fetch("/api/admin/ctvs", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id: ctv.id }),
+      });
+      const payload = (await response.json()) as CtvMutationResponse;
+
+      if (!response.ok || !payload.success || !payload.data) {
+        setError(payload.error ?? "Không mở khóa được CTV.");
+        return;
+      }
+
+      updateCtvRow(payload.data);
+      setMessage("Đã mở khóa đăng nhập CTV.");
+    } catch {
+      setError("Không mở khóa được CTV.");
+    } finally {
+      setUnlockingId("");
+    }
+  }
+
   async function copyRef(ctv: AdminCtvRow) {
     try {
       await navigator.clipboard.writeText(buildRefUrl(ctv.code));
@@ -299,60 +249,6 @@ export default function CtvAdminPanel({ initialCtvs }: CtvAdminPanelProps) {
       window.setTimeout(() => setCopiedCode(""), 1600);
     } catch {
       setCopiedCode("");
-    }
-  }
-
-  async function fetchTransactions(
-    ctv: AdminCtvRow,
-    page = 1,
-    filters = appliedTransactionFilters,
-  ) {
-    setTransactionLoading(true);
-    setTransactionError("");
-
-    try {
-      const params = new URLSearchParams({
-        page: String(page),
-        type: filters.type,
-        status: filters.status,
-        litmatchId: filters.litmatchId,
-        updatedFrom: filters.updatedFrom,
-        updatedTo: filters.updatedTo,
-      });
-      const response = await fetch(
-        `/api/admin/ctvs/${ctv.id}/transactions?${params.toString()}`,
-      );
-      const payload = (await response.json()) as CtvTransactionsResponse;
-
-      if (!response.ok || !payload.success || !payload.data) {
-        setTransactionError(payload.error ?? "Không tải được giao dịch CTV.");
-        return;
-      }
-
-      setSelectedCtv(ctv);
-      setTransactionData(payload.data);
-    } catch {
-      setTransactionError("Không tải được giao dịch CTV.");
-    } finally {
-      setTransactionLoading(false);
-    }
-  }
-
-  function applyTransactionFilters() {
-    setAppliedTransactionFilters(transactionFilters);
-
-    if (selectedCtv) {
-      fetchTransactions(selectedCtv, 1, transactionFilters);
-    }
-  }
-
-  function clearTransactionFilters() {
-    const emptyFilters = emptyTransactionFilters();
-    setTransactionFilters(emptyFilters);
-    setAppliedTransactionFilters(emptyFilters);
-
-    if (selectedCtv) {
-      fetchTransactions(selectedCtv, 1, emptyFilters);
     }
   }
 
@@ -446,15 +342,9 @@ export default function CtvAdminPanel({ initialCtvs }: CtvAdminPanelProps) {
         {ctvPageData.rows.length ? (
           ctvPageData.rows.map((ctv) => {
             const locked = isLocked(ctv);
-            const selected = selectedCtv?.id === ctv.id;
 
             return (
-              <article
-                className={`${styles.ctvCard}${
-                  selected ? ` ${styles.ctvCardSelected}` : ""
-                }`}
-                key={ctv.id}
-              >
+              <article className={styles.ctvCard} key={ctv.id}>
                 <div className={styles.ctvCardTop}>
                   <span className={styles.ctvAvatar} aria-hidden="true">
                     {ctvInitials(ctv.name)}
@@ -497,15 +387,12 @@ export default function CtvAdminPanel({ initialCtvs }: CtvAdminPanelProps) {
                   >
                     {copiedCode === ctv.code ? "Đã chép" : "Copy link"}
                   </button>
-                  <button
-                    className={`${styles.inlineActionButton}${
-                      selected ? ` ${styles.inlineActionButtonActive}` : ""
-                    }`}
-                    type="button"
-                    onClick={() => fetchTransactions(ctv, 1)}
+                  <Link
+                    className={styles.inlineActionButton}
+                    href={`/admin/ctv/${ctv.id}/revenue`}
                   >
                     Doanh thu
-                  </button>
+                  </Link>
                   <button
                     className={styles.inlineActionButton}
                     type="button"
@@ -513,14 +400,27 @@ export default function CtvAdminPanel({ initialCtvs }: CtvAdminPanelProps) {
                   >
                     Sửa
                   </button>
-                  <button
-                    className={styles.ctvDangerButton}
-                    type="button"
-                    disabled={lockingId === ctv.id || locked}
-                    onClick={() => lockCtv(ctv)}
-                  >
-                    {lockingId === ctv.id ? "Đang khóa..." : "Xóa"}
-                  </button>
+                  {locked ? (
+                    <button
+                      className={styles.inlineActionButton}
+                      type="button"
+                      disabled={unlockingId === ctv.id}
+                      onClick={() => unlockCtv(ctv)}
+                    >
+                      {unlockingId === ctv.id
+                        ? "Đang mở khóa..."
+                        : "Mở khóa đăng nhập"}
+                    </button>
+                  ) : (
+                    <button
+                      className={styles.ctvDangerButton}
+                      type="button"
+                      disabled={lockingId === ctv.id}
+                      onClick={() => lockCtv(ctv)}
+                    >
+                      {lockingId === ctv.id ? "Đang khóa..." : "Xóa"}
+                    </button>
+                  )}
                 </div>
               </article>
             );
@@ -554,247 +454,6 @@ export default function CtvAdminPanel({ initialCtvs }: CtvAdminPanelProps) {
           </button>
         </div>
       </div>
-
-      {selectedCtv ? (
-        <section className={styles.formSection} aria-labelledby="ctv-revenue-title">
-          <div className={styles.panelHeader}>
-            <div>
-              <h2 id="ctv-revenue-title">Doanh thu {selectedCtv.name}</h2>
-              <p>
-                Link ref: <strong>{buildRefPath(selectedCtv.code)}</strong>. Ghi
-                chú nạp trực tiếp dùng code{" "}
-                <strong>{selectedCtv.code}</strong>.
-              </p>
-            </div>
-          </div>
-
-          <div className={styles.filters}>
-            <label className={styles.filterField}>
-              <span>Loại</span>
-              <select
-                value={transactionFilters.type}
-                onChange={(event) =>
-                  setTransactionFilters((current) => ({
-                    ...current,
-                    type: event.target.value as CtvTransactionFilters["type"],
-                  }))
-                }
-              >
-                <option value="all">Tất cả</option>
-                <option value="bank">Chuyển khoản</option>
-                <option value="card">Nạp thẻ</option>
-                <option value="direct">Nạp trực tiếp</option>
-              </select>
-            </label>
-            <label className={styles.filterField}>
-              <span>Trạng thái</span>
-              <select
-                value={transactionFilters.status}
-                onChange={(event) =>
-                  setTransactionFilters((current) => ({
-                    ...current,
-                    status: event.target.value as CtvTransactionFilters["status"],
-                  }))
-                }
-              >
-                <option value="all">Tất cả</option>
-                <option value="incomplete">Chưa thanh toán</option>
-                <option value="processing">Đang xử lý</option>
-                <option value="paid">Đã thanh toán</option>
-                <option value="completed">Đã nạp</option>
-                <option value="recharge_failed">Lỗi nạp</option>
-                <option value="pending">Nạp trực tiếp đang xử lý</option>
-                <option value="failed">Nạp trực tiếp lỗi</option>
-              </select>
-            </label>
-            <label className={styles.filterField}>
-              <span>ID Litmatch</span>
-              <input
-                value={transactionFilters.litmatchId}
-                onChange={(event) =>
-                  setTransactionFilters((current) => ({
-                    ...current,
-                    litmatchId: event.target.value,
-                  }))
-                }
-              />
-            </label>
-            <label className={styles.filterField}>
-              <span>Từ ngày</span>
-              <input
-                type="date"
-                value={transactionFilters.updatedFrom}
-                onChange={(event) =>
-                  setTransactionFilters((current) => ({
-                    ...current,
-                    updatedFrom: event.target.value,
-                  }))
-                }
-              />
-            </label>
-            <label className={styles.filterField}>
-              <span>Đến ngày</span>
-              <input
-                type="date"
-                value={transactionFilters.updatedTo}
-                onChange={(event) =>
-                  setTransactionFilters((current) => ({
-                    ...current,
-                    updatedTo: event.target.value,
-                  }))
-                }
-              />
-            </label>
-            <button
-              className={styles.applyFilterButton}
-              type="button"
-              onClick={applyTransactionFilters}
-            >
-              Lọc
-            </button>
-            <button
-              className={styles.clearFilterButton}
-              type="button"
-              onClick={clearTransactionFilters}
-            >
-              Xóa lọc
-            </button>
-          </div>
-
-          {transactionError ? (
-            <p className={styles.errorText} role="alert">
-              {transactionError}
-            </p>
-          ) : null}
-
-          {transactionData ? (
-            <>
-              <div className={styles.ctvSummaryGrid}>
-                <div className={styles.ctvSummaryPrimary}>
-                  <span>Doanh thu</span>
-                  <strong>
-                    {formatNumber(transactionData.summary.totalCompletedRevenue)} đ
-                  </strong>
-                  <small>Chỉ tính giao dịch đã nạp thành công</small>
-                </div>
-                <div className={styles.ctvSummaryItem}>
-                  <span>Tổng giao dịch</span>
-                  <strong>
-                    {formatNumber(transactionData.summary.transactionCount)}
-                  </strong>
-                </div>
-                <div className={styles.ctvSummaryItem}>
-                  <span>Đã nạp</span>
-                  <strong>
-                    {formatNumber(transactionData.summary.completedCount)}
-                  </strong>
-                </div>
-                <div className={styles.ctvSummaryItem}>
-                  <span>Kim cương</span>
-                  <strong>
-                    {formatNumber(transactionData.summary.diamondRewardAmount)}
-                  </strong>
-                </div>
-                <div className={styles.ctvSummaryItem}>
-                  <span>Sao</span>
-                  <strong>
-                    {formatNumber(transactionData.summary.starRewardAmount)}
-                  </strong>
-                </div>
-              </div>
-
-              <div className={styles.ctvTransactionList}>
-                {transactionData.rows.length ? (
-                  transactionData.rows.map((row) => (
-                    <article
-                      className={styles.ctvTransactionItem}
-                      key={`${row.type}-${row.id}`}
-                    >
-                      <div className={styles.ctvTransactionMain}>
-                        <div>
-                          <strong>{transactionTypeLabel(row)}</strong>
-                          <span>ID Litmatch {row.litmatchId}</span>
-                        </div>
-                        <span
-                          className={`${styles.statusBadge} ${statusClassName(
-                            row.status,
-                          )}`}
-                        >
-                          {statusLabel(row.status)}
-                        </span>
-                      </div>
-                      <div className={styles.ctvTransactionMetrics}>
-                        <div>
-                          <span>Doanh thu</span>
-                          <strong>{formatNumber(row.revenueAmount)} đ</strong>
-                        </div>
-                        <div>
-                          <span>Thực nhận</span>
-                          <strong>
-                            {formatNumber(row.rewardAmount)}{" "}
-                            {rewardLabel(row.rewardType)}
-                          </strong>
-                        </div>
-                        <div>
-                          <span>Mã/Nội dung</span>
-                          <strong>{row.transferContent ?? row.requestId ?? "-"}</strong>
-                        </div>
-                        <div>
-                          <span>Cập nhật</span>
-                          <strong>{formatDate(row.updatedAt)}</strong>
-                        </div>
-                      </div>
-                    </article>
-                  ))
-                ) : (
-                  <p className={styles.emptyCell}>Không có giao dịch phù hợp.</p>
-                )}
-              </div>
-
-              <div className={styles.pagination}>
-                <span>
-                  Trang {formatNumber(transactionData.page)}/
-                  {formatNumber(transactionData.totalPages)}
-                </span>
-                <div className={styles.paginationActions}>
-                  <button
-                    type="button"
-                    disabled={transactionData.page <= 1 || transactionLoading}
-                    onClick={() =>
-                      fetchTransactions(
-                        selectedCtv,
-                        Math.max(1, transactionData.page - 1),
-                      )
-                    }
-                  >
-                    Trước
-                  </button>
-                  <button
-                    type="button"
-                    disabled={
-                      transactionData.page >= transactionData.totalPages ||
-                      transactionLoading
-                    }
-                    onClick={() =>
-                      fetchTransactions(
-                        selectedCtv,
-                        Math.min(
-                          transactionData.totalPages,
-                          transactionData.page + 1,
-                        ),
-                      )
-                    }
-                  >
-                    Sau
-                  </button>
-                </div>
-              </div>
-            </>
-          ) : (
-            <p>{transactionLoading ? "Đang tải giao dịch..." : "Chọn CTV để xem doanh thu."}</p>
-          )}
-        </section>
-      ) : null}
     </section>
   );
 }

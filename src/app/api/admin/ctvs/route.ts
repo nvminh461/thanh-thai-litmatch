@@ -5,6 +5,7 @@ import {
   CtvNotFoundError,
   CtvValidationError,
   disableCtvLogin,
+  enableCtvLogin,
   listCtvs,
   updateCtv,
 } from "@/server/ctv-repository";
@@ -125,5 +126,24 @@ export async function DELETE(request: Request) {
     });
   } catch (error) {
     return handleCtvError(error, "Không khóa được CTV.");
+  }
+}
+
+export async function PUT(request: Request) {
+  const unauthorized = await requireAdmin();
+
+  if (unauthorized) {
+    return unauthorized;
+  }
+
+  try {
+    const body = getBodyObject(await request.json());
+
+    return NextResponse.json({
+      success: true,
+      data: await enableCtvLogin({ id: body.id }),
+    });
+  } catch (error) {
+    return handleCtvError(error, "Không mở khóa được CTV.");
   }
 }
