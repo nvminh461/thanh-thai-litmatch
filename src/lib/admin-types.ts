@@ -7,8 +7,16 @@ export type AdminPaymentStatus =
   | "completed"
   | "recharge_failed";
 
+export type AdminDirectRechargeStatus = "pending" | "completed" | "failed";
+
 export type AdminBankPaymentMode = "fixed" | "lifetime";
 export type AdminBankQrBlacklistStatus = "active" | "unblocked";
+
+export type AdminCtvRef = {
+  id: string;
+  code: string;
+  name: string;
+};
 
 export type AdminRuntimeConfigForm = {
   bankId: string;
@@ -37,6 +45,7 @@ export type AdminBankPaymentRow = {
   bankMode: AdminBankPaymentMode;
   status: AdminPaymentStatus;
   litmatchId: string;
+  ctvRef: AdminCtvRef | null;
   amount: number;
   rewardType: RewardType;
   rewardAmount: number;
@@ -68,6 +77,7 @@ export type AdminCardPaymentRow = {
   id: string;
   status: AdminPaymentStatus;
   litmatchId: string;
+  ctvRef: AdminCtvRef | null;
   rewardType: RewardType;
   requestId: string | null;
   cardProvider: string;
@@ -139,6 +149,56 @@ export type AdminBankQrBlacklistRow = {
 export type AdminPaginatedBankQrBlacklist =
   AdminPaginatedPayments<AdminBankQrBlacklistRow>;
 
+export type AdminCtvRow = {
+  id: string;
+  name: string;
+  code: string;
+  username: string;
+  loginDisabledAt: string | null;
+  deletedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AdminPaginatedCtvs = AdminPaginatedPayments<AdminCtvRow>;
+
+export type AdminCtvTransactionType = "bank" | "card" | "direct";
+
+export type AdminCtvTransactionRow = {
+  id: string;
+  type: AdminCtvTransactionType;
+  bankMode: AdminBankPaymentMode | null;
+  status: AdminPaymentStatus | AdminDirectRechargeStatus;
+  litmatchId: string;
+  rewardType: RewardType;
+  amount: number;
+  revenueAmount: number;
+  rewardAmount: number;
+  transferContent: string | null;
+  requestId: string | null;
+  cardProvider: string | null;
+  cardDenomination: number | null;
+  createdAt: string;
+  updatedAt: string;
+  completedAt: string | null;
+};
+
+export type AdminCtvRevenueSummary = {
+  transactionCount: number;
+  completedCount: number;
+  bankCompletedRevenue: number;
+  cardCompletedRevenue: number;
+  totalCompletedRevenue: number;
+  totalRewardAmount: number;
+  diamondRewardAmount: number;
+  starRewardAmount: number;
+};
+
+export type AdminPaginatedCtvTransactions =
+  AdminPaginatedPayments<AdminCtvTransactionRow> & {
+    summary: AdminCtvRevenueSummary;
+  };
+
 export type AdminLifetimeQrReportSummary = {
   paymentCount: number;
   totalAmount: number;
@@ -195,14 +255,14 @@ export type AdminRechargePreview = {
 
 export type AdminDirectRechargeRow = {
   id: string;
-  status: "pending" | "completed" | "failed";
+  status: AdminDirectRechargeStatus;
   adminUsername: string;
   litmatchId: string;
   verifiedUser: AdminTargetUserInfo | null;
   rewardType: RewardType;
   rewardAmount: number;
   note: string | null;
-  rechargeStatus: "pending" | "completed" | "failed";
+  rechargeStatus: AdminDirectRechargeStatus;
   rechargeError: string | null;
   rechargeCompletedAt: string | null;
   createdAt: string;

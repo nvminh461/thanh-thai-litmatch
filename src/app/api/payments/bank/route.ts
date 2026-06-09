@@ -10,6 +10,7 @@ export async function POST(request: Request) {
       litmatchId?: unknown;
       amount?: unknown;
       rewardType?: unknown;
+      ctvCode?: unknown;
     };
     const data = await createBankPayment(body);
 

@@ -151,6 +151,13 @@
   opacity: 0.55;
 }
 
+a.secondaryButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+
 .sidebar {
   position: sticky;
   top: 18px;
@@ -206,6 +213,10 @@
   font-weight: 800;
   padding: 10px 12px;
   text-align: left;
+}
+
+a.sidebarButton {
+  text-decoration: none;
 }
 
 .sidebarButton span {
@@ -540,6 +551,129 @@
   line-height: 1.15;
 }
 
+.refLine {
+  overflow-wrap: anywhere;
+  color: #475467;
+  font-family: var(--font-geist-mono), Consolas, monospace;
+  font-size: 13px;
+}
+
+.ctvSummaryGrid {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.35fr) repeat(4, minmax(130px, 1fr));
+  gap: 12px;
+}
+
+.ctvSummaryPrimary,
+.ctvSummaryItem {
+  min-width: 0;
+  display: grid;
+  align-content: center;
+  gap: 6px;
+  border: 1px solid #d8e0ea;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 14px;
+}
+
+.ctvSummaryPrimary {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+}
+
+.ctvSummaryPrimary span,
+.ctvSummaryItem span {
+  color: #667085;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.ctvSummaryPrimary strong,
+.ctvSummaryItem strong {
+  color: #101828;
+  font-size: 22px;
+  line-height: 1.15;
+}
+
+.ctvSummaryPrimary strong {
+  color: #1d4ed8;
+  font-size: 28px;
+}
+
+.ctvSummaryPrimary small {
+  color: #475467;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.ctvTransactionList {
+  display: grid;
+  gap: 10px;
+}
+
+.ctvTransactionItem {
+  display: grid;
+  gap: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 14px;
+}
+
+.ctvTransactionMain {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ctvTransactionMain div {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.ctvTransactionMain strong {
+  color: #101828;
+  font-size: 15px;
+}
+
+.ctvTransactionMain span {
+  color: #667085;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.ctvTransactionMetrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.ctvTransactionMetrics div {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+  border-radius: 8px;
+  background: #f8fafc;
+  padding: 10px;
+}
+
+.ctvTransactionMetrics span {
+  color: #667085;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.ctvTransactionMetrics strong {
+  overflow-wrap: anywhere;
+  color: #172033;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
 .compactValue {
   overflow-wrap: anywhere;
   font-size: 15px !important;
@@ -569,6 +703,12 @@
   padding: 0 10px;
 }
 
+a.inlineActionButton {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+
 .inlineActions {
   display: inline-flex;
   flex-wrap: wrap;
@@ -584,6 +724,148 @@
 .inlineActionButton:disabled {
   cursor: not-allowed;
   opacity: 0.55;
+}
+
+.inlineActionButtonActive {
+  border-color: #1f6feb;
+  background: #1f6feb;
+  color: #ffffff;
+}
+
+.ctvList {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.ctvCard {
+  min-width: 0;
+  display: grid;
+  gap: 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 14px;
+}
+
+.ctvCardSelected {
+  border-color: #93c5fd;
+  background: #eff6ff;
+}
+
+.ctvCardTop {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.ctvAvatar {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: #dbeafe;
+  color: #1d4ed8;
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.ctvIdentity {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.ctvIdentity strong {
+  overflow: hidden;
+  color: #101828;
+  font-size: 16px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ctvIdentity span {
+  overflow: hidden;
+  color: #667085;
+  font-size: 13px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ctvCardMeta {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+  gap: 8px;
+}
+
+.ctvCardMeta div {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+  border-radius: 8px;
+  background: #f8fafc;
+  padding: 10px;
+}
+
+.ctvCardMeta span {
+  color: #667085;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.ctvCardMeta strong {
+  overflow-wrap: anywhere;
+  color: #172033;
+  font-size: 14px;
+  line-height: 1.25;
+}
+
+.ctvCardMeta small {
+  overflow-wrap: anywhere;
+  color: #667085;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.ctvCardActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ctvDangerButton {
+  min-height: 32px;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  background: #fff7f7;
+  color: #b42318;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 0 10px;
+}
+
+.ctvDangerButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.ctvEmptyState {
+  margin: 0;
+  border: 1px dashed #cbd5e1;
+  border-radius: 8px;
+  color: #667085;
+  font-size: 14px;
+  font-weight: 700;
+  padding: 18px;
+  text-align: center;
 }
 
 .wrapCell {
@@ -960,6 +1242,18 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .ctvSummaryGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ctvSummaryPrimary {
+    grid-column: 1 / -1;
+  }
+
+  .ctvTransactionMetrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .pagination {
     align-items: stretch;
     flex-direction: column;
@@ -1194,6 +1488,34 @@
     grid-template-columns: 1fr;
   }
 
+  .ctvSummaryGrid,
+  .ctvTransactionMetrics {
+    grid-template-columns: 1fr;
+  }
+
+  .ctvTransactionMain {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .ctvList {
+    grid-template-columns: 1fr;
+  }
+
+  .ctvCardTop,
+  .ctvCardMeta {
+    grid-template-columns: 1fr;
+  }
+
+  .ctvAvatar {
+    display: none;
+  }
+
+  .ctvCardActions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
   .reportActions,
   .modalActions {
     align-items: stretch;
@@ -1259,6 +1581,15 @@
 .field span,
 .filterField span,
 .summaryItem span,
+.ctvSummaryPrimary span,
+.ctvSummaryItem span,
+.ctvSummaryPrimary small,
+.ctvTransactionMain span,
+.ctvTransactionMetrics span,
+.ctvIdentity span,
+.ctvCardMeta span,
+.ctvCardMeta small,
+.ctvEmptyState,
 .pagination,
 .reportActions,
 .userPreview span,
@@ -1272,6 +1603,12 @@
 .formSection h3,
 .sidebarBrand strong,
 .summaryItem strong,
+.ctvSummaryPrimary strong,
+.ctvSummaryItem strong,
+.ctvTransactionMain strong,
+.ctvTransactionMetrics strong,
+.ctvIdentity strong,
+.ctvCardMeta strong,
 .userPreview strong,
 .modalHeader h2 {
   color: #fff9ff;
@@ -1324,11 +1661,53 @@
 
 .filters,
 .summaryItem,
+.ctvSummaryPrimary,
+.ctvSummaryItem,
+.ctvTransactionItem,
+.ctvTransactionMetrics div,
+.ctvCard,
+.ctvCardMeta div,
 .userPreview,
 .tableWrap,
 .reportTableWrap {
   border-color: rgba(216, 180, 254, 0.22);
   background: rgba(17, 9, 38, 0.58);
+}
+
+.ctvCardSelected {
+  border-color: rgba(125, 211, 252, 0.42);
+  background: rgba(30, 64, 175, 0.3);
+}
+
+.ctvAvatar {
+  background: rgba(125, 211, 252, 0.18);
+  color: #bae6fd;
+}
+
+.ctvSummaryPrimary {
+  border-color: rgba(125, 211, 252, 0.34);
+  background: rgba(30, 64, 175, 0.28);
+}
+
+.ctvCardMeta div,
+.ctvTransactionMetrics div {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.inlineActionButtonActive {
+  border-color: #c084fc;
+  background: rgba(124, 58, 237, 0.72);
+  color: #ffffff;
+}
+
+.ctvDangerButton {
+  border-color: rgba(251, 113, 133, 0.38);
+  background: rgba(127, 29, 29, 0.28);
+  color: #fecdd3;
+}
+
+.ctvEmptyState {
+  border-color: rgba(216, 180, 254, 0.28);
 }
 
 .sidebarButton {

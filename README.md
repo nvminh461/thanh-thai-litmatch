@@ -58,6 +58,7 @@ PAY1S_BASE_URL=https://doithe1s.vn/chargingws/v2
 ADMIN_USERNAME=admin
 ADMIN_PASSWORD=change_me
 ADMIN_SESSION_SECRET=replace_with_a_long_random_secret
+CTV_SESSION_SECRET=replace_with_a_long_random_secret_for_ctv
 ```
 
 Tỉ giá không lấy từ env. Khi DB chưa có cấu hình mới, hệ thống dùng mặc định:
@@ -160,7 +161,18 @@ Admin có các màn:
 - Cấu hình hệ thống: VietQR, tỉ lệ chuyển khoản, tỉ lệ nạp thẻ, thông tin liên hệ và link GROUP CSKH riêng.
 - Giao dịch chuyển khoản: lọc trạng thái, ID Litmatch, nội dung chuyển khoản, ngày cập nhật, phân biệt QR cố định/QR trọn đời, phân trang 20 giao dịch/trang.
 - Giao dịch nạp thẻ: lọc trạng thái, ID Litmatch, ghi chú, ngày cập nhật, thống kê theo bộ lọc, thông tin PAY1S/callback, trạng thái nạp Litmatch, phân trang 20 giao dịch/trang.
+- Quản lý CTV: tạo/sửa/khóa đăng nhập CTV, copy link `/?ctv=CODE`, xem doanh thu và giao dịch theo từng CTV. `CODE` tự sinh từ tên CTV, ví dụ `Minh Nguyen` thành `MINHNGUYEN`.
 - Danh sách đen giao dịch: ID bị chặn tạo QR hoặc nạp thẻ khi có 5 giao dịch QR chưa thanh toán hoặc 5 giao dịch thẻ không thành công liên tiếp.
+
+CTV đăng nhập tại:
+
+```text
+http://localhost:3000/ctv/login
+```
+
+CTV có thể tự đổi mật khẩu trong trang thống kê của mình.
+
+Khi admin khóa/xóa CTV, CTV không đăng nhập xem thống kê được nữa nhưng link ref cũ vẫn tiếp tục ghi nhận giao dịch cho CTV đó.
 
 Các trạng thái giao dịch:
 
@@ -355,7 +367,7 @@ Checklist test PAY1S:
 
 ## Ghi Chú Vận Hành
 
-- `DATABASE_URL`, `SEPAY_WEBHOOK_API_KEY`, `PAY1S_*`, `TOTP_*`, `LIT_AGENT_*` và `ADMIN_SESSION_SECRET` chỉ cấu hình trong env.
+- `DATABASE_URL`, `SEPAY_WEBHOOK_API_KEY`, `PAY1S_*`, `TOTP_*`, `LIT_AGENT_*`, `ADMIN_SESSION_SECRET` và `CTV_SESSION_SECRET` chỉ cấu hình trong env.
 - VietQR, tỉ lệ nạp và prefix mã thanh toán được lưu trong MongoDB và chỉnh trong admin.
 - Webhook duplicate không nạp lại nhờ unique index trên `sepay.id` và `card_webhook_events.eventKey`.
 - QR chuyển khoản trọn đời không hết hạn trong ứng dụng; muốn vô hiệu hóa mã cũ cần bổ sung màn quản trị riêng.

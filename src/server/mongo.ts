@@ -82,7 +82,13 @@ export async function ensureMongoIndexes() {
             },
           ),
         db.collection("bank_payments").createIndex({ updatedAt: -1 }),
+        db
+          .collection("bank_payments")
+          .createIndex({ "ctvRef.ctvId": 1, updatedAt: -1 }),
         db.collection("card_payments").createIndex({ updatedAt: -1 }),
+        db
+          .collection("card_payments")
+          .createIndex({ "ctvRef.ctvId": 1, updatedAt: -1 }),
         db
           .collection("card_payments")
           .createIndex(
@@ -100,11 +106,17 @@ export async function ensureMongoIndexes() {
           .createIndex({ transferContent: 1 }, { unique: true }),
         db.collection("lifetime_bank_qrs").createIndex({ updatedAt: -1 }),
         db
+          .collection("lifetime_bank_qrs")
+          .createIndex({ "ctvRef.ctvId": 1, updatedAt: -1 }),
+        db
           .collection("card_webhook_events")
           .createIndex({ eventKey: 1 }, { unique: true }),
         db.collection("admin_direct_recharges").createIndex({ createdAt: -1 }),
         db.collection("admin_direct_recharges").createIndex({ updatedAt: -1 }),
         db.collection("admin_direct_recharges").createIndex({ litmatchId: 1 }),
+        db
+          .collection("admin_direct_recharges")
+          .createIndex({ note: 1, updatedAt: -1 }),
         db.collection("bank_qr_blacklist").createIndex(
           { litmatchId: 1 },
           {
@@ -115,6 +127,9 @@ export async function ensureMongoIndexes() {
         db.collection("bank_qr_blacklist").createIndex({ updatedAt: -1 }),
         db.collection("bank_qr_blacklist").createIndex({ status: 1 }),
         db.collection("app_settings").createIndex({ key: 1 }, { unique: true }),
+        db.collection("ctvs").createIndex({ code: 1 }, { unique: true }),
+        db.collection("ctvs").createIndex({ username: 1 }, { unique: true }),
+        db.collection("ctvs").createIndex({ updatedAt: -1 }),
       ]);
     })();
   }

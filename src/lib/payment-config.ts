@@ -87,6 +87,20 @@ export function calculateReceiveAmount(
   );
 }
 
+export function calculatePaymentAmountFromReward(
+  rewardAmount: number,
+  rewardType: RewardType,
+  rateConfig: RateConfig,
+) {
+  const rate = getCurrencyRate(rateConfig, rewardType);
+
+  if (rate <= 0 || rewardAmount <= 0) {
+    return 0;
+  }
+
+  return Math.round((rewardAmount / rate) * rateConfig.baseAmount);
+}
+
 export function normalizeLitmatchId(value: string) {
   return value.trim().replace(/\D/g, "");
 }

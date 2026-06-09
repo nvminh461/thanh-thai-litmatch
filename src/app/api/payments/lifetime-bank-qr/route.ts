@@ -11,6 +11,7 @@ export async function POST(request: Request) {
       litmatchId?: unknown;
       rewardType?: unknown;
       transferContent?: unknown;
+      ctvCode?: unknown;
     };
     const data = await createLifetimeBankQr(body);
 

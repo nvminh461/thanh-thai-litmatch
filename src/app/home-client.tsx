@@ -22,6 +22,10 @@ import styles from "./page.module.css";
 type CurrencyType = RewardType;
 type TopUpMode = "bank" | "card";
 type PaymentStatusKind = "bank" | "card" | "lifetime-bank-qr";
+type PublicCtvRef = {
+  code: string;
+  name: string;
+};
 
 type QrPayment = {
   id: string;
@@ -166,6 +170,23 @@ function parseLifetimeTransferContent(value: string) {
 
 function getLifetimeTransferContentPrefix(rewardType: CurrencyType) {
   return rewardType === "diamond" ? "LMKC " : "LMSAO ";
+}
+
+function parseCtvLifetimeLitmatchId(
+  value: string,
+  rewardType: CurrencyType,
+  ctvCode: string,
+) {
+  const litmatchId = normalizeLitmatchId(value);
+
+  return {
+    normalized: `${getLifetimeTransferContentPrefix(rewardType)}${ctvCode} ${
+      litmatchId || ""
+    }`.trim(),
+    litmatchId,
+    rewardType,
+    valid: /^\d{5,20}$/.test(litmatchId),
+  };
 }
 
 function paymentStatusLabel(status: PaymentStatusValue) {
@@ -399,6 +420,7 @@ type LifetimeBankQrModalProps = {
   bankConfig: BankConfig;
   bankRateConfig: RateConfig;
   copiedField: string;
+  ctvRef: PublicCtvRef | null;
   currency: CurrencyType;
   error: string;
   existingLifetimeQr: LifetimeBankQr | null;
@@ -426,6 +448,7 @@ function LifetimeBankQrModal({
   bankConfig,
   bankRateConfig,
   copiedField,
+  ctvRef,
   currency,
   error,
   existingLifetimeQr,
@@ -452,9 +475,13 @@ function LifetimeBankQrModal({
   const activeIconClass = `${styles.inlineIcon} ${
     currency === "star" ? styles.starIcon : styles.diamondIcon
   }`;
-  const parsedLifetimeContent = parseLifetimeTransferContent(
-    lifetimeTransferContent,
-  );
+  const parsedLifetimeContent = ctvRef
+    ? parseCtvLifetimeLitmatchId(
+        lifetimeTransferContent,
+        currency,
+        ctvRef.code,
+      )
+    : parseLifetimeTransferContent(lifetimeTransferContent);
 
   return (
     <div className={styles.lifetimeModalOverlay} role="presentation">
@@ -628,13 +655,19 @@ function LifetimeBankQrModal({
             </div>
 
             <label className={styles.cardTopupField}>
-              <span>Nội dung chuyển khoản</span>
+              <span>{ctvRef ? "ID Litmatch" : "Nội dung chuyển khoản"}</span>
               <input
-                aria-label="Nội dung chuyển khoản QR trọn đời"
+                aria-label={
+                  ctvRef
+                    ? "ID Litmatch QR trọn đời"
+                    : "Nội dung chuyển khoản QR trọn đời"
+                }
                 placeholder={
-                  currency === "diamond"
-                    ? "LMKC 123456789"
-                    : "LMSAO 123456789"
+                  ctvRef
+                    ? "123456789"
+                    : currency === "diamond"
+                      ? "LMKC 123456789"
+                      : "LMSAO 123456789"
                 }
                 value={lifetimeTransferContent}
                 onChange={(event) =>
@@ -644,16 +677,33 @@ function LifetimeBankQrModal({
             </label>
 
             <div className={styles.lifetimeGuide}>
-              <strong>
-                Format: LMKC IDLITMATCH hoặc LMSAO IDLITMATCH. Có thể thêm
-                TENCTV ở giữa.
-              </strong>
-              <span>
-                Ví dụ: LMKC 123456789 để nạp kim cương, LMSAO 123456789 để nạp
-                sao. Nếu có cộng tác viên, nhập LMKC THANHTHAI 123456789. Tên
-                CTV chỉ dùng chữ/số không dấu, không khoảng trắng. Hệ thống sẽ
-                lấy ID ở cuối nội dung để kiểm tra và tự nạp khi tiền về.
-              </span>
+              {ctvRef ? (
+                <>
+                  <strong>
+                    Link CTV {ctvRef.name}: hệ thống tự tạo nội dung{" "}
+                    {getLifetimeTransferContentPrefix(currency)}
+                    {ctvRef.code} IDLITMATCH.
+                  </strong>
+                  <span>
+                    Khách chỉ cần nhập ID Litmatch. Khi tiền về, giao dịch được
+                    ghi nhận cho CTV {ctvRef.name}.
+                  </span>
+                </>
+              ) : (
+                <>
+                  <strong>
+                    Format: LMKC IDLITMATCH hoặc LMSAO IDLITMATCH. Có thể thêm
+                    TENCTV ở giữa.
+                  </strong>
+                  <span>
+                    Ví dụ: LMKC 123456789 để nạp kim cương, LMSAO 123456789 để
+                    nạp sao. Nếu có cộng tác viên, nhập LMKC THANHTHAI
+                    123456789. Tên CTV chỉ dùng chữ/số không dấu, không khoảng
+                    trắng. Hệ thống sẽ lấy ID ở cuối nội dung để kiểm tra và tự
+                    nạp khi tiền về.
+                  </span>
+                </>
+              )}
             </div>
 
             <div className={styles.lifetimeVerifyRow}>
@@ -738,11 +788,13 @@ export default function HomeClient({
   bankConfig,
   bankRateConfig,
   cardRateConfig,
+  ctvRef,
   siteConfig,
 }: {
   bankConfig: BankConfig;
   bankRateConfig: RateConfig;
   cardRateConfig: RateConfig;
+  ctvRef: PublicCtvRef | null;
   siteConfig: SiteConfig;
 }) {
   const [topUpMode, setTopUpMode] = useState<TopUpMode>("bank");
@@ -773,7 +825,7 @@ export default function HomeClient({
   const [lifetimeQrLoading, setLifetimeQrLoading] = useState(false);
   const [lifetimeQrError, setLifetimeQrError] = useState("");
   const [lifetimeTransferContent, setLifetimeTransferContent] = useState(
-    getLifetimeTransferContentPrefix("diamond"),
+    ctvRef ? "" : getLifetimeTransferContentPrefix("diamond"),
   );
   const [lifetimeStatusMessage, setLifetimeStatusMessage] = useState("");
   const [formError, setFormError] = useState("");
@@ -821,6 +873,16 @@ export default function HomeClient({
     bankConfig.accountNo.trim() &&
     bankConfig.accountName.trim();
 
+  function getInitialLifetimeTransferContent(rewardType: CurrencyType) {
+    return ctvRef ? "" : getLifetimeTransferContentPrefix(rewardType);
+  }
+
+  function getPreparedLifetimeContent(value = lifetimeTransferContent) {
+    return ctvRef
+      ? parseCtvLifetimeLitmatchId(value, lifetimeCurrency, ctvRef.code)
+      : parseLifetimeTransferContent(value);
+  }
+
   function handlePackageSelect(price: number) {
     setPaymentAmount(price);
     setSelectedPackagePrice(price);
@@ -852,7 +914,7 @@ export default function HomeClient({
 
   function handleLifetimeTransferContentChange(value: string) {
     setLifetimeTransferContent(value);
-    setLitmatchId(parseLifetimeTransferContent(value).litmatchId);
+    setLitmatchId(getPreparedLifetimeContent(value).litmatchId);
     setVerifiedLitmatchId(null);
     setVerifyError("");
     setLifetimeQrError("");
@@ -898,6 +960,7 @@ export default function HomeClient({
           litmatchId: normalizedId,
           amount: paymentAmount,
           rewardType: currency,
+          ctvCode: ctvRef?.code,
         }),
       });
       const payload = (await response.json()) as BankPaymentResponse;
@@ -930,7 +993,7 @@ export default function HomeClient({
     setLifetimeQrError("");
     setLifetimeStatusMessage("");
     setLifetimeTransferContent(
-      getLifetimeTransferContentPrefix(lifetimeCurrency),
+      getInitialLifetimeTransferContent(lifetimeCurrency),
     );
     setCopiedField("");
   }
@@ -942,7 +1005,7 @@ export default function HomeClient({
     setLifetimeQrError("");
     setLifetimeStatusMessage("");
     setLifetimeTransferContent(
-      getLifetimeTransferContentPrefix(lifetimeCurrency),
+      getInitialLifetimeTransferContent(lifetimeCurrency),
     );
     setCopiedField("");
   }
@@ -953,7 +1016,7 @@ export default function HomeClient({
     setLifetimeQrError("");
     setLifetimeStatusMessage("");
     setLifetimeTransferContent(
-      getLifetimeTransferContentPrefix(lifetimeCurrency),
+      getInitialLifetimeTransferContent(lifetimeCurrency),
     );
     setCopiedField("");
   }
@@ -1016,6 +1079,10 @@ export default function HomeClient({
   function handleLifetimeCurrencyChange(value: CurrencyType) {
     setLifetimeCurrency(value);
     setLifetimeTransferContent((current) => {
+      if (ctvRef) {
+        return current;
+      }
+
       const parsed = parseLifetimeTransferContent(current);
 
       if (!current.trim() || !parsed.valid) {
@@ -1043,11 +1110,13 @@ export default function HomeClient({
       return;
     }
 
-    const parsedContent = parseLifetimeTransferContent(lifetimeTransferContent);
+    const parsedContent = getPreparedLifetimeContent();
 
     if (!parsedContent.valid) {
       setLifetimeQrError(
-        "Nội dung QR trọn đời phải có dạng LMKC IDLITMATCH, LMSAO IDLITMATCH hoặc thêm TENCTV ở giữa.",
+        ctvRef
+          ? "Vui lòng nhập ID Litmatch hợp lệ từ 5-20 số."
+          : "Nội dung QR trọn đời phải có dạng LMKC IDLITMATCH, LMSAO IDLITMATCH hoặc thêm TENCTV ở giữa.",
       );
       return;
     }
@@ -1080,6 +1149,7 @@ export default function HomeClient({
         body: JSON.stringify({
           transferContent: parsedContent.normalized,
           rewardType: lifetimeCurrency,
+          ctvCode: ctvRef?.code,
         }),
       });
       const payload = (await response.json()) as LifetimeBankQrResponse;
@@ -1155,6 +1225,7 @@ export default function HomeClient({
           cardDenomination,
           cardCode,
           cardSerial,
+          ctvCode: ctvRef?.code,
         }),
       });
       const payload = (await response.json()) as CardPaymentResponse;
@@ -1181,9 +1252,7 @@ export default function HomeClient({
   }
 
   async function handleVerifyId() {
-    const lifetimeContent = parseLifetimeTransferContent(
-      lifetimeTransferContent,
-    );
+    const lifetimeContent = getPreparedLifetimeContent();
     const normalizedId = showLifetimeQrModal
       ? lifetimeContent.litmatchId
       : normalizeLitmatchId(litmatchId);
@@ -1191,7 +1260,9 @@ export default function HomeClient({
     if (!normalizedId) {
       setVerifyError(
         showLifetimeQrModal
-          ? "Vui lòng nhập nội dung đúng dạng LMKC IDLITMATCH, LMSAO IDLITMATCH hoặc thêm TENCTV ở giữa."
+          ? ctvRef
+            ? "Vui lòng nhập ID Litmatch."
+            : "Vui lòng nhập nội dung đúng dạng LMKC IDLITMATCH, LMSAO IDLITMATCH hoặc thêm TENCTV ở giữa."
           : "Vui lòng nhập ID Litmatch.",
       );
       return;
@@ -2045,6 +2116,7 @@ export default function HomeClient({
           bankConfig={bankConfig}
           bankRateConfig={bankRateConfig}
           copiedField={copiedField}
+          ctvRef={ctvRef}
           currency={lifetimeCurrency}
           error={lifetimeQrError}
           existingLifetimeQr={existingLifetimeQr}
