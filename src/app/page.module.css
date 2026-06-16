@@ -3911,3 +3911,111 @@
     grid-template-columns: 1fr;
   }
 }
+
+@media (max-width: 719px) {
+  .page {
+    background-attachment: scroll;
+  }
+
+  .page button,
+  .page a,
+  .page input,
+  .page select {
+    touch-action: manipulation;
+  }
+
+  .page::before,
+  .shell {
+    display: none;
+  }
+
+  .arcadeBoard,
+  .guidedDock,
+  .receiptPanel,
+  .rewardStage,
+  .scanStage,
+  .verifyModal,
+  .lifetimeModal,
+  .paymentInfoCard,
+  .lifetimeReceipt,
+  .lifetimeQrStage,
+  .lifetimeQrSummary,
+  .lifetimeGuide,
+  .lifetimeVerifyRow,
+  .cardTopupSummary,
+  .userPreview {
+    backdrop-filter: none;
+  }
+
+  .currencyTabActive,
+  .rewardStage::before,
+  .rewardToken,
+  .submitButton,
+  .cardSubmitButton,
+  .cardSeaDecor,
+  .qrSticker,
+  .qrBubble {
+    animation: none;
+  }
+
+  .fallingItem {
+    animation: none;
+    will-change: auto;
+  }
+}
+
+@media (max-width: 719px) and (hover: none) {
+  .pillLink:hover,
+  .pillLink:focus-visible,
+  .packageButton:hover,
+  .packageButton:focus-visible,
+  .submitButton:hover,
+  .submitButton:focus-visible,
+  .copyButton:hover,
+  .copyButton:focus-visible,
+  .backButton:hover,
+  .backButton:focus-visible,
+  .cardBackButton:hover,
+  .cardBackButton:focus-visible,
+  .cardRewardButton:hover,
+  .cardRewardButton:focus-visible,
+  .cardSubmitButton:hover,
+  .cardSubmitButton:focus-visible,
+  .currencyTab:hover,
+  .currencyTab:focus-visible,
+  .currencyTabActive:hover,
+  .currencyTabActive:focus-visible,
+  .currencyIconTab:hover,
+  .currencyIconTab:focus-visible,
+  .downloadButton:hover,
+  .downloadButton:focus-visible,
+  .statusButton:hover:not(:disabled),
+  .statusButton:focus-visible:not(:disabled),
+  .verifyButton:hover,
+  .verifyButton:focus-visible,
+  .galaxySignals a:hover,
+  .galaxySignals a:focus-visible {
+    filter: none;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shell {
+    display: none;
+  }
+
+  .fallingItem,
+  .currencyTabActive,
+  .rewardStage::before,
+  .rewardToken,
+  .submitButton,
+  .cardSubmitButton,
+  .cardSeaDecor,
+  .qrSticker,
+  .qrBubble {
+    animation: none;
+    transition: none;
+    will-change: auto;
+  }
+}
