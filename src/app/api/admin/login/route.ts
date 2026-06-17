@@ -5,8 +5,13 @@ import {
   verifyAdminLogin,
 } from "@/server/admin-auth";
 
-function redirectTo(request: Request, path: string) {
-  return NextResponse.redirect(new URL(path, request.url), { status: 303 });
+function redirectTo(path: string) {
+  return new NextResponse(null, {
+    status: 303,
+    headers: {
+      Location: path,
+    },
+  });
 }
 
 export async function POST(request: Request) {
@@ -18,14 +23,14 @@ export async function POST(request: Request) {
     const isValidLogin = await verifyAdminLogin(username, password);
 
     if (!isValidLogin) {
-      return redirectTo(request, "/admin/login?error=invalid");
+      return redirectTo("/admin/login?error=invalid");
     }
 
-    const response = redirectTo(request, "/admin");
+    const response = redirectTo("/admin");
     setAdminSessionCookie(response, createAdminSessionToken(username.trim()));
 
     return response;
   } catch {
-    return redirectTo(request, "/admin/login?error=config");
+    return redirectTo("/admin/login?error=config");
   }
 }

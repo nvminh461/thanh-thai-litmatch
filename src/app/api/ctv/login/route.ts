@@ -5,8 +5,13 @@ import {
   verifyCtvLogin,
 } from "@/server/ctv-auth";
 
-function redirectTo(request: Request, pathname: string) {
-  return NextResponse.redirect(new URL(pathname, request.url));
+function redirectTo(pathname: string) {
+  return new NextResponse(null, {
+    status: 303,
+    headers: {
+      Location: pathname,
+    },
+  });
 }
 
 export async function POST(request: Request) {
@@ -17,14 +22,14 @@ export async function POST(request: Request) {
     const profile = await verifyCtvLogin(username, password);
 
     if (!profile) {
-      return redirectTo(request, "/ctv/login?error=invalid");
+      return redirectTo("/ctv/login?error=invalid");
     }
 
-    const response = redirectTo(request, "/ctv");
+    const response = redirectTo("/ctv");
     setCtvSessionCookie(response, createCtvSessionToken(profile));
 
     return response;
   } catch {
-    return redirectTo(request, "/ctv/login?error=config");
+    return redirectTo("/ctv/login?error=config");
   }
 }
