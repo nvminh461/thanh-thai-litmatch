@@ -19,6 +19,7 @@ import type {
   AdminPaginatedDirectRecharges,
   AdminPaymentStatus,
   AdminPaginatedPayments,
+  AdminEasyPosOrderSyncResult,
   AdminRechargePreview,
   AdminRechargeResult,
 } from "@/lib/admin-types";
@@ -49,6 +50,18 @@ import {
   type Pay1sChargingResponse,
 } from "@/server/pay1s/client";
 import {
+  buildEasyPosBillKeys,
+  buildEasyPosBillPayload,
+  createEasyPosBill,
+  getEasyPosBillMetadata,
+  getEasyPosConfig,
+  isEasyPosEnabled,
+  type EasyPosBillKeys,
+  type EasyPosBillPayload,
+  type EasyPosOrderStatus,
+  type EasyPosSyncSource,
+} from "@/server/easypos";
+import {
   resolveCtvRefSnapshot,
   serializeCtvRef,
   type CtvRefSnapshot,
@@ -69,6 +82,7 @@ const CARD_PAYMENT_BLACKLIST_REASON =
   "Có 5 giao dịch nạp thẻ không thành công liên tiếp.";
 const PAYMENT_BLACKLIST_ERROR =
   "ID Litmatch này đang bị chặn tạo QR hoặc nạp thẻ do có nhiều giao dịch chưa hoàn tất. Vui lòng liên hệ admin.";
+const EASYPOS_PENDING_STALE_MS = 5 * 60 * 1000;
 export const ADMIN_PAYMENT_PAGE_SIZE = 20;
 
 export class PaymentValidationError extends Error {
@@ -153,6 +167,21 @@ export type BankPaymentDocument = {
     requestedAt: Date;
     completedAt?: Date;
     failedAt?: Date;
+  };
+  easyposOrder?: {
+    status: EasyPosOrderStatus;
+    productId: number;
+    quantity: number;
+    amount: number;
+    keys: EasyPosBillKeys;
+    request?: EasyPosBillPayload;
+    response?: unknown;
+    error?: string;
+    requestedAt: Date;
+    completedAt?: Date;
+    failedAt?: Date;
+    syncedBy?: EasyPosSyncSource;
+    adminUsername?: string;
   };
   createdAt: Date;
   updatedAt: Date;
@@ -582,6 +611,30 @@ function canRetryBankRecharge(payment: BankPaymentDocument) {
   );
 }
 
+function canSyncEasyPosOrder(payment: BankPaymentDocument) {
+  if (
+    !isEasyPosEnabled() ||
+    payment.status !== "completed" ||
+    !payment.sepay
+  ) {
+    return false;
+  }
+
+  const easyposOrder = payment.easyposOrder;
+
+  if (!easyposOrder || easyposOrder.status === "failed") {
+    return true;
+  }
+
+  if (easyposOrder.status === "completed") {
+    return false;
+  }
+
+  return (
+    easyposOrder.requestedAt.getTime() + EASYPOS_PENDING_STALE_MS < Date.now()
+  );
+}
+
 function canRetryCardRecharge(payment: CardPaymentDocument) {
   return (
     payment.status === "recharge_failed" &&
@@ -612,6 +665,9 @@ function serializeBankPayment(payment: BankPaymentDocument): AdminBankPaymentRow
     rechargeError: payment.recharge?.error ?? null,
     rechargeCompletedAt: serializeDate(payment.recharge?.completedAt),
     canRetryRecharge: canRetryBankRecharge(payment),
+    easyposOrderStatus: payment.easyposOrder?.status ?? null,
+    easyposOrderError: payment.easyposOrder?.error ?? null,
+    canSyncEasyposOrder: canSyncEasyPosOrder(payment),
   };
 }
 
@@ -674,6 +730,18 @@ function normalizePaymentObjectId(value: string) {
   }
 
   return new ObjectId(value);
+}
+
+function normalizePaymentObjectIdInput(value: unknown) {
+  if (value instanceof ObjectId) {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    return normalizePaymentObjectId(value);
+  }
+
+  throw new PaymentNotFoundError();
 }
 
 function extractTransferContentCandidates(content: string) {
@@ -2476,6 +2544,248 @@ export async function retryFailedPaymentRecharge(input: {
   }
 }
 
+function getEasyPosOrderErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "Không sync được đơn hàng.";
+}
+
+async function getSerializedBankPaymentById(paymentId: ObjectId) {
+  const bankPayments = await getCollection<BankPaymentDocument>("bank_payments");
+  const payment = await bankPayments.findOne({ _id: paymentId });
+
+  if (!payment) {
+    throw new PaymentNotFoundError();
+  }
+
+  return serializeBankPayment(payment);
+}
+
+function isEasyPosOrderPendingStale(
+  payment: BankPaymentDocument,
+  now: Date,
+) {
+  return (
+    payment.easyposOrder?.status === "pending" &&
+    payment.easyposOrder.requestedAt.getTime() + EASYPOS_PENDING_STALE_MS <
+      now.getTime()
+  );
+}
+
+function getEasyPosIneligibleMessage(payment: BankPaymentDocument) {
+  if (payment.status !== "completed") {
+    return "Chỉ sync ĐH cho giao dịch đã nạp thành công.";
+  }
+
+  if (!payment.sepay) {
+    return "Chỉ sync ĐH cho giao dịch chuyển khoản SePay.";
+  }
+
+  return "Giao dịch này không đủ điều kiện sync ĐH.";
+}
+
+export async function syncEasyPosOrderForSePayPayment(input: {
+  paymentId?: unknown;
+  source: EasyPosSyncSource;
+  adminUsername?: string;
+}): Promise<AdminEasyPosOrderSyncResult> {
+  const paymentId = normalizePaymentObjectIdInput(input.paymentId);
+  const bankPayments = await getCollection<BankPaymentDocument>("bank_payments");
+  const payment = await bankPayments.findOne({ _id: paymentId });
+
+  if (!payment) {
+    throw new PaymentNotFoundError();
+  }
+
+  if (payment.status !== "completed" || !payment.sepay) {
+    const message = getEasyPosIneligibleMessage(payment);
+
+    if (input.source === "admin") {
+      throw new PaymentValidationError(message);
+    }
+
+    return {
+      status: "skipped",
+      message,
+      payment: serializeBankPayment(payment),
+    };
+  }
+
+  if (!isEasyPosEnabled()) {
+    return {
+      status: "skipped",
+      message: "EasyPos chưa được bật.",
+      payment: serializeBankPayment(payment),
+    };
+  }
+
+  if (payment.easyposOrder?.status === "completed") {
+    return {
+      status: "completed",
+      message: "ĐH EasyPos đã được sync.",
+      payment: serializeBankPayment(payment),
+    };
+  }
+
+  const now = new Date();
+
+  if (
+    payment.easyposOrder?.status === "pending" &&
+    !isEasyPosOrderPendingStale(payment, now)
+  ) {
+    return {
+      status: "skipped",
+      message: "ĐH EasyPos đang được sync.",
+      payment: serializeBankPayment(payment),
+    };
+  }
+
+  let config: ReturnType<typeof getEasyPosConfig>;
+
+  try {
+    config = getEasyPosConfig();
+  } catch (error) {
+    return {
+      status: "failed",
+      message: getEasyPosOrderErrorMessage(error),
+      payment: serializeBankPayment(payment),
+    };
+  }
+
+  const keys =
+    payment.easyposOrder?.keys ??
+    buildEasyPosBillKeys({ taxAuthorityPrefix: config.taxAuthorityPrefix, now });
+  const buildInput = {
+    rewardType: payment.rewardType,
+    quantity: payment.rewardAmount,
+    amount: payment.amount,
+    keys,
+  };
+  const request = buildEasyPosBillPayload(buildInput);
+  const metadata = getEasyPosBillMetadata(buildInput);
+  const staleBefore = new Date(now.getTime() - EASYPOS_PENDING_STALE_MS);
+  const claimResult = await bankPayments.updateOne(
+    {
+      _id: paymentId,
+      status: "completed",
+      "sepay.id": { $exists: true },
+      $or: [
+        { easyposOrder: { $exists: false } },
+        { "easyposOrder.status": "failed" },
+        {
+          "easyposOrder.status": "pending",
+          "easyposOrder.requestedAt": { $lt: staleBefore },
+        },
+      ],
+    },
+    {
+      $set: {
+        updatedAt: now,
+        "easyposOrder.status": "pending",
+        "easyposOrder.productId": metadata.productId,
+        "easyposOrder.quantity": metadata.quantity,
+        "easyposOrder.amount": metadata.amount,
+        "easyposOrder.keys": keys,
+        "easyposOrder.request": request,
+        "easyposOrder.requestedAt": now,
+        "easyposOrder.syncedBy": input.source,
+        ...(input.adminUsername
+          ? { "easyposOrder.adminUsername": input.adminUsername }
+          : {}),
+      },
+      $unset: {
+        "easyposOrder.response": "",
+        "easyposOrder.error": "",
+        "easyposOrder.completedAt": "",
+        "easyposOrder.failedAt": "",
+      },
+    },
+  );
+
+  if (!claimResult.modifiedCount) {
+    const current = await bankPayments.findOne({ _id: paymentId });
+
+    if (!current) {
+      throw new PaymentNotFoundError();
+    }
+
+    return {
+      status:
+        current.easyposOrder?.status === "completed" ? "completed" : "skipped",
+      message:
+        current.easyposOrder?.status === "completed"
+          ? "ĐH EasyPos đã được sync."
+          : "ĐH EasyPos đang được sync.",
+      payment: serializeBankPayment(current),
+    };
+  }
+
+  try {
+    const result = await createEasyPosBill(request);
+    const completedAt = new Date();
+
+    await bankPayments.updateOne(
+      {
+        _id: paymentId,
+        "easyposOrder.status": "pending",
+        "easyposOrder.keys.idempotencyKey": keys.idempotencyKey,
+      },
+      {
+        $set: {
+          updatedAt: completedAt,
+          "easyposOrder.status": "completed",
+          "easyposOrder.response": result.response,
+          "easyposOrder.completedAt": completedAt,
+        },
+        $unset: {
+          "easyposOrder.error": "",
+          "easyposOrder.failedAt": "",
+        },
+      },
+    );
+
+    return {
+      status: "completed",
+      message: "Đã sync ĐH EasyPos.",
+      payment: await getSerializedBankPaymentById(paymentId),
+    };
+  } catch (error) {
+    const failedAt = new Date();
+    const message = getEasyPosOrderErrorMessage(error);
+
+    await bankPayments.updateOne(
+      {
+        _id: paymentId,
+        "easyposOrder.status": "pending",
+        "easyposOrder.keys.idempotencyKey": keys.idempotencyKey,
+      },
+      {
+        $set: {
+          updatedAt: failedAt,
+          "easyposOrder.status": "failed",
+          "easyposOrder.error": message,
+          "easyposOrder.failedAt": failedAt,
+        },
+      },
+    );
+
+    return {
+      status: "failed",
+      message,
+      payment: await getSerializedBankPaymentById(paymentId),
+    };
+  }
+}
+
+async function trySyncEasyPosOrderAfterSePayCompleted(paymentId: ObjectId) {
+  try {
+    await syncEasyPosOrderForSePayPayment({
+      paymentId,
+      source: "webhook",
+    });
+  } catch {
+    // EasyPos sync must not make a successful SePay recharge retry.
+  }
+}
+
 export async function previewDirectAdminRecharge(input: {
   litmatchId?: unknown;
   rewardType?: unknown;
@@ -3267,6 +3577,8 @@ async function retrySePayBankRechargeFromWebhook(
   });
 
   if (retryResult.status === "completed") {
+    await trySyncEasyPosOrderAfterSePayCompleted(paymentId);
+
     return markEvent("recharge_completed", {
       paymentId,
       message: retryResult.message,
@@ -3372,6 +3684,8 @@ async function processSePayWebhookCore(
       );
 
       if (result.rechargeResult.status === "recharge_completed") {
+        await trySyncEasyPosOrderAfterSePayCompleted(result.paymentId);
+
         return markEvent("recharge_completed", {
           paymentId: result.paymentId,
         });
@@ -3391,6 +3705,8 @@ async function processSePayWebhookCore(
       );
 
       if (result.rechargeResult.status === "recharge_completed") {
+        await trySyncEasyPosOrderAfterSePayCompleted(result.paymentId);
+
         return markEvent("recharge_completed", {
           paymentId: result.paymentId,
         });
@@ -3464,6 +3780,8 @@ async function processSePayWebhookCore(
   const rechargeResult = await rechargeBankPaymentAfterPaid(payment);
 
   if (rechargeResult.status === "recharge_completed") {
+    await trySyncEasyPosOrderAfterSePayCompleted(paymentId);
+
     return markEvent("recharge_completed", { paymentId });
   }
 

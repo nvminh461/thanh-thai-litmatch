@@ -61,6 +61,9 @@ export type AdminBankPaymentRow = {
   rechargeError: string | null;
   rechargeCompletedAt: string | null;
   canRetryRecharge: boolean;
+  easyposOrderStatus: "pending" | "completed" | "failed" | null;
+  easyposOrderError: string | null;
+  canSyncEasyposOrder: boolean;
 };
 
 export type AdminBankPaymentSummary = {
@@ -287,4 +290,10 @@ export type AdminRechargeResult = {
   status: "completed" | "failed";
   message: string;
   directRecharge?: AdminDirectRechargeRow;
+};
+
+export type AdminEasyPosOrderSyncResult = {
+  status: "completed" | "failed" | "skipped";
+  message: string;
+  payment?: AdminBankPaymentRow;
 };

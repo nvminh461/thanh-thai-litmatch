@@ -11,6 +11,7 @@ import type {
   AdminPaginatedCardPayments,
   AdminPaginatedCtvs,
   AdminDirectRechargeRow,
+  AdminEasyPosOrderSyncResult,
   AdminLifetimeQrExportResult,
   AdminLifetimeQrReport,
   AdminPaginatedPayments,
@@ -138,6 +139,12 @@ type RechargeResultResponse = {
 type BankPaymentUpdateResponse = {
   success: boolean;
   data?: AdminBankPaymentRow;
+  error?: string;
+};
+
+type EasyPosOrderSyncResponse = {
+  success: boolean;
+  data?: AdminEasyPosOrderSyncResult;
   error?: string;
 };
 
@@ -271,6 +278,42 @@ function rechargeStatusLabel(value: AdminBankPaymentRow["rechargeStatus"]) {
   }
 
   return "";
+}
+
+function easyposOrderStatusLabel(
+  value: AdminBankPaymentRow["easyposOrderStatus"],
+) {
+  if (value === "completed") {
+    return "Đã sync";
+  }
+
+  if (value === "failed") {
+    return "Lỗi sync";
+  }
+
+  if (value === "pending") {
+    return "Đang sync";
+  }
+
+  return "Chưa sync";
+}
+
+function easyposOrderStatusClassName(
+  value: AdminBankPaymentRow["easyposOrderStatus"],
+) {
+  if (value === "completed") {
+    return styles.statusCompleted;
+  }
+
+  if (value === "failed") {
+    return styles.statusFailed;
+  }
+
+  if (value === "pending") {
+    return styles.statusProcessing;
+  }
+
+  return styles.statusIncomplete;
 }
 
 function canEditBankTransferContent(payment: AdminBankPaymentRow) {
@@ -553,6 +596,9 @@ export default function AdminDashboard({
   const [appliedBlacklistFilters, setAppliedBlacklistFilters] =
     useState<BlacklistFilterState>(getEmptyBlacklistFilters);
   const [bankError, setBankError] = useState("");
+  const [easyposOrderMessage, setEasyposOrderMessage] = useState("");
+  const [easyposOrderError, setEasyposOrderError] = useState("");
+  const [easyposSyncingId, setEasyposSyncingId] = useState("");
   const [cardError, setCardError] = useState("");
   const [reportError, setReportError] = useState("");
   const [blacklistError, setBlacklistError] = useState("");
@@ -1434,6 +1480,50 @@ export default function AdminDashboard({
     }
   }
 
+  async function syncEasyPosOrder(paymentId: string) {
+    setEasyposSyncingId(paymentId);
+    setEasyposOrderMessage("");
+    setEasyposOrderError("");
+
+    try {
+      const response = await fetch("/api/admin/easypos-orders/sync", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ paymentId }),
+      });
+      const payload = (await response.json()) as EasyPosOrderSyncResponse;
+
+      if (!response.ok || !payload.success || !payload.data) {
+        throw new Error(payload.error ?? "Không sync được ĐH EasyPos.");
+      }
+
+      if (payload.data.payment) {
+        setBankPageData((current) => ({
+          ...current,
+          rows: current.rows.map((payment) =>
+            payment.id === payload.data?.payment?.id
+              ? payload.data.payment
+              : payment,
+          ),
+        }));
+      }
+
+      if (payload.data.status === "failed") {
+        setEasyposOrderError(payload.data.message);
+      } else {
+        setEasyposOrderMessage(payload.data.message);
+      }
+    } catch (error) {
+      setEasyposOrderError(
+        error instanceof Error ? error.message : "Không sync được ĐH EasyPos.",
+      );
+    } finally {
+      setEasyposSyncingId("");
+    }
+  }
+
   async function saveCardNoteEdit() {
     if (!cardNoteEdit) {
       return;
@@ -2083,6 +2173,16 @@ export default function AdminDashboard({
                 {bankError}
               </p>
             ) : null}
+            {easyposOrderError ? (
+              <p className={styles.errorText} role="alert">
+                {easyposOrderError}
+              </p>
+            ) : null}
+            {easyposOrderMessage ? (
+              <p className={styles.successText} role="status">
+                {easyposOrderMessage}
+              </p>
+            ) : null}
 
             <div className={styles.summaryGrid}>
               <div className={styles.summaryItem}>
@@ -2139,6 +2239,8 @@ export default function AdminDashboard({
                     <th>Thực nhận</th>
                     <th>Nạp Litmatch</th>
                     <th>Lỗi nạp</th>
+                    <th>Hóa đơn</th>
+                    <th>Lỗi ĐH</th>
                     <th>Thao tác</th>
                     <th>Nội dung CK</th>
                     <th>SePay</th>
@@ -2190,8 +2292,21 @@ export default function AdminDashboard({
                         <td data-label="Lỗi nạp" className={styles.errorCell}>
                           {payment.rechargeError ?? "-"}
                         </td>
+                        <td data-label="Hóa đơn">
+                          <span
+                            className={`${styles.statusBadge} ${easyposOrderStatusClassName(
+                              payment.easyposOrderStatus,
+                            )}`}
+                          >
+                            {easyposOrderStatusLabel(payment.easyposOrderStatus)}
+                          </span>
+                        </td>
+                        <td data-label="Lỗi ĐH" className={styles.errorCell}>
+                          {payment.easyposOrderError ?? "-"}
+                        </td>
                         <td data-label="Thao tác">
                           {payment.canRetryRecharge ||
+                          payment.canSyncEasyposOrder ||
                           canEditBankTransferContent(payment) ? (
                             <div className={styles.inlineActions}>
                               {payment.canRetryRecharge ? (
@@ -2204,6 +2319,18 @@ export default function AdminDashboard({
                                   }
                                 >
                                   Nạp lại
+                                </button>
+                              ) : null}
+                              {payment.canSyncEasyposOrder ? (
+                                <button
+                                  className={styles.inlineActionButton}
+                                  type="button"
+                                  disabled={easyposSyncingId === payment.id}
+                                  onClick={() => syncEasyPosOrder(payment.id)}
+                                >
+                                  {easyposSyncingId === payment.id
+                                    ? "Đang sync..."
+                                    : "Sync ĐH"}
                                 </button>
                               ) : null}
                               {canEditBankTransferContent(payment) ? (

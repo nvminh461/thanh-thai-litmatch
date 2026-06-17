@@ -85,6 +85,17 @@ export async function ensureMongoIndexes() {
         db
           .collection("bank_payments")
           .createIndex({ "ctvRef.ctvId": 1, updatedAt: -1 }),
+        db
+          .collection("bank_payments")
+          .createIndex(
+            { "easyposOrder.keys.idempotencyKey": 1 },
+            {
+              unique: true,
+              partialFilterExpression: {
+                "easyposOrder.keys.idempotencyKey": { $exists: true },
+              },
+            },
+          ),
         db.collection("card_payments").createIndex({ updatedAt: -1 }),
         db
           .collection("card_payments")
