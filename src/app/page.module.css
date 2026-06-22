@@ -2678,7 +2678,11 @@
       rgba(4, 3, 14, 0.74) 48%,
       rgba(4, 3, 14, 0.94)
     ),
-    radial-gradient(circle at 50% 14%, rgba(192, 132, 252, 0.28), transparent 34%),
+    radial-gradient(
+      circle at 50% 14%,
+      rgba(192, 132, 252, 0.28),
+      transparent 34%
+    ),
     url("/tone-color.jpg") center / cover fixed;
   color: #f7f1ff;
 }
@@ -2704,7 +2708,11 @@
 .userPreview {
   border-color: rgba(216, 180, 254, 0.34);
   background:
-    radial-gradient(circle at 18% 8%, rgba(255, 255, 255, 0.13), transparent 32%),
+    radial-gradient(
+      circle at 18% 8%,
+      rgba(255, 255, 255, 0.13),
+      transparent 32%
+    ),
     linear-gradient(145deg, rgba(20, 10, 42, 0.88), rgba(45, 20, 86, 0.72));
   box-shadow:
     inset 0 1px 18px rgba(255, 255, 255, 0.1),
@@ -2720,7 +2728,12 @@
 
 .rewardStage::before {
   background:
-    radial-gradient(circle, transparent 0 55%, rgba(255, 255, 255, 0.2) 56% 57%, transparent 58%),
+    radial-gradient(
+      circle,
+      transparent 0 55%,
+      rgba(255, 255, 255, 0.2) 56% 57%,
+      transparent 58%
+    ),
     conic-gradient(
       from 40deg,
       rgba(103, 232, 249, 0.15),
@@ -2769,7 +2782,11 @@
 .lifetimeCloseButton,
 .existingLifetimeQrButton {
   border-color: rgba(216, 180, 254, 0.32);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.13), rgba(35, 17, 68, 0.74));
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.13),
+    rgba(35, 17, 68, 0.74)
+  );
   box-shadow:
     inset 0 1px 8px rgba(255, 255, 255, 0.12),
     0 10px 22px rgba(4, 3, 14, 0.26);
@@ -2790,8 +2807,12 @@
 .packageButtonSelected,
 .rewardToken {
   border-color: rgba(250, 204, 21, 0.42);
-  background:
-    radial-gradient(circle at 50% 34%, rgba(255, 255, 255, 0.42) 0 18%, rgba(192, 132, 252, 0.82) 52%, rgba(49, 18, 92, 0.9) 100%);
+  background: radial-gradient(
+    circle at 50% 34%,
+    rgba(255, 255, 255, 0.42) 0 18%,
+    rgba(192, 132, 252, 0.82) 52%,
+    rgba(49, 18, 92, 0.9) 100%
+  );
   box-shadow:
     inset 0 0 18px rgba(255, 255, 255, 0.2),
     0 16px 34px rgba(126, 34, 206, 0.42),
@@ -2804,7 +2825,11 @@
 .dockStep,
 .scanPill {
   border-color: rgba(216, 180, 254, 0.28);
-  background: linear-gradient(145deg, rgba(48, 24, 88, 0.82), rgba(22, 12, 48, 0.76));
+  background: linear-gradient(
+    145deg,
+    rgba(48, 24, 88, 0.82),
+    rgba(22, 12, 48, 0.76)
+  );
   color: #f5edff;
 }
 
@@ -2861,8 +2886,11 @@
 .cardTopupField select,
 .cardTopupField input {
   border-color: rgba(216, 180, 254, 0.38);
-  background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.15), rgba(28, 16, 58, 0.82));
+  background: linear-gradient(
+    145deg,
+    rgba(255, 255, 255, 0.15),
+    rgba(28, 16, 58, 0.82)
+  );
   box-shadow:
     inset 0 2px 12px rgba(255, 255, 255, 0.08),
     0 11px 22px rgba(4, 3, 14, 0.28);
@@ -2880,8 +2908,10 @@
 
 .cardTopupField select {
   background:
-    linear-gradient(45deg, transparent 50%, #f5edff 50%) calc(100% - 24px) 50% / 7px 7px no-repeat,
-    linear-gradient(135deg, #f5edff 50%, transparent 50%) calc(100% - 18px) 50% / 7px 7px no-repeat,
+    linear-gradient(45deg, transparent 50%, #f5edff 50%) calc(100% - 24px) 50% /
+      7px 7px no-repeat,
+    linear-gradient(135deg, #f5edff 50%, transparent 50%) calc(100% - 18px)
+      50% / 7px 7px no-repeat,
     linear-gradient(145deg, rgba(255, 255, 255, 0.15), rgba(28, 16, 58, 0.82));
 }
 
@@ -2917,10 +2947,28 @@
 .lifetimeQrFrame {
   border-color: rgba(233, 213, 255, 0.84);
   background:
-    linear-gradient(90deg, rgba(216, 180, 254, 0.32), rgba(103, 232, 249, 0.12), rgba(216, 180, 254, 0.32)) 16px 16px / calc(100% - 32px) calc(100% - 32px) no-repeat,
-    radial-gradient(circle at 17% 18%, rgba(250, 204, 21, 0.24) 0 8px, transparent 9px),
-    radial-gradient(circle at 84% 80%, rgba(103, 232, 249, 0.2) 0 9px, transparent 10px),
-    linear-gradient(145deg, rgba(255, 255, 255, 0.98), rgba(235, 222, 255, 0.92));
+    linear-gradient(
+        90deg,
+        rgba(216, 180, 254, 0.32),
+        rgba(103, 232, 249, 0.12),
+        rgba(216, 180, 254, 0.32)
+      )
+      16px 16px / calc(100% - 32px) calc(100% - 32px) no-repeat,
+    radial-gradient(
+      circle at 17% 18%,
+      rgba(250, 204, 21, 0.24) 0 8px,
+      transparent 9px
+    ),
+    radial-gradient(
+      circle at 84% 80%,
+      rgba(103, 232, 249, 0.2) 0 9px,
+      transparent 10px
+    ),
+    linear-gradient(
+      145deg,
+      rgba(255, 255, 255, 0.98),
+      rgba(235, 222, 255, 0.92)
+    );
   box-shadow:
     inset 0 0 0 10px rgba(92, 34, 148, 0.18),
     inset 0 0 0 14px rgba(255, 255, 255, 0.86),
@@ -2936,7 +2984,11 @@
 .qrBubble {
   border-color: rgba(233, 213, 255, 0.36);
   background:
-    radial-gradient(circle at 32% 26%, rgba(255, 255, 255, 0.92) 0 8%, transparent 9% 100%),
+    radial-gradient(
+      circle at 32% 26%,
+      rgba(255, 255, 255, 0.92) 0 8%,
+      transparent 9% 100%
+    ),
     rgba(147, 51, 234, 0.26);
 }
 
@@ -2983,11 +3035,33 @@
   pointer-events: none;
   content: "";
   background:
-    linear-gradient(115deg, transparent 0 24%, rgba(255, 255, 255, 0.08) 24.2% 24.4%, transparent 24.7% 100%),
-    linear-gradient(22deg, transparent 0 63%, rgba(216, 180, 254, 0.1) 63.1% 63.4%, transparent 63.7% 100%),
-    radial-gradient(circle at 18% 24%, rgba(250, 204, 21, 0.16) 0 1px, transparent 2px),
-    radial-gradient(circle at 74% 18%, rgba(255, 255, 255, 0.28) 0 1px, transparent 2px),
-    radial-gradient(circle at 86% 72%, rgba(103, 232, 249, 0.22) 0 1px, transparent 2px);
+    linear-gradient(
+      115deg,
+      transparent 0 24%,
+      rgba(255, 255, 255, 0.08) 24.2% 24.4%,
+      transparent 24.7% 100%
+    ),
+    linear-gradient(
+      22deg,
+      transparent 0 63%,
+      rgba(216, 180, 254, 0.1) 63.1% 63.4%,
+      transparent 63.7% 100%
+    ),
+    radial-gradient(
+      circle at 18% 24%,
+      rgba(250, 204, 21, 0.16) 0 1px,
+      transparent 2px
+    ),
+    radial-gradient(
+      circle at 74% 18%,
+      rgba(255, 255, 255, 0.28) 0 1px,
+      transparent 2px
+    ),
+    radial-gradient(
+      circle at 86% 72%,
+      rgba(103, 232, 249, 0.22) 0 1px,
+      transparent 2px
+    );
   background-size:
     100% 100%,
     100% 100%,
@@ -3018,8 +3092,17 @@
   border: 1px solid rgba(216, 180, 254, 0.22);
   border-radius: 24px;
   background:
-    radial-gradient(circle at 10% 50%, rgba(250, 204, 21, 0.12), transparent 34%),
-    linear-gradient(90deg, rgba(17, 10, 40, 0.72), rgba(53, 24, 92, 0.5), rgba(9, 7, 27, 0.66)),
+    radial-gradient(
+      circle at 10% 50%,
+      rgba(250, 204, 21, 0.12),
+      transparent 34%
+    ),
+    linear-gradient(
+      90deg,
+      rgba(17, 10, 40, 0.72),
+      rgba(53, 24, 92, 0.5),
+      rgba(9, 7, 27, 0.66)
+    ),
     rgba(8, 6, 24, 0.38);
   box-shadow:
     inset 0 1px 14px rgba(255, 255, 255, 0.08),
@@ -3045,8 +3128,8 @@
   gap: 8px;
 }
 
-.galaxySignals a,
-.galaxySignals span {
+.galaxySignals > a:not(.galaxySignalLabeled),
+.galaxySignals > span:not(.galaxySignalLabeled) {
   width: 36px;
   height: 36px;
   display: grid;
@@ -3054,7 +3137,11 @@
   border: 1px solid rgba(216, 180, 254, 0.36);
   border-radius: 999px;
   background:
-    radial-gradient(circle at 34% 26%, rgba(255, 255, 255, 0.16), transparent 38%),
+    radial-gradient(
+      circle at 34% 26%,
+      rgba(255, 255, 255, 0.16),
+      transparent 38%
+    ),
     rgba(12, 8, 30, 0.72);
   box-shadow:
     inset 0 1px 8px rgba(255, 255, 255, 0.11),
@@ -3066,12 +3153,78 @@
   text-decoration: none;
 }
 
-.galaxySignals a:hover,
-.galaxySignals a:focus-visible {
+.galaxySignals > a:not(.galaxySignalLabeled):hover,
+.galaxySignals > a:not(.galaxySignalLabeled):focus-visible {
   border-color: rgba(250, 204, 21, 0.58);
   color: #ffffff;
   outline: none;
   transform: translateY(-2px);
+}
+
+.galaxySignalLabeled {
+  width: auto;
+  min-width: 0;
+  min-height: 36px;
+  height: auto;
+  padding: 0 10px 0 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  overflow: visible;
+  border: 1px solid rgba(216, 180, 254, 0.36);
+  border-radius: 999px;
+  background:
+    radial-gradient(
+      circle at 34% 26%,
+      rgba(255, 255, 255, 0.16),
+      transparent 38%
+    ),
+    rgba(12, 8, 30, 0.72);
+  box-shadow:
+    inset 0 1px 8px rgba(255, 255, 255, 0.11),
+    0 8px 18px rgba(4, 3, 14, 0.2),
+    0 0 18px rgba(192, 132, 252, 0.18);
+  color: #fff2b8;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.2px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.galaxySignalLabeled:hover,
+.galaxySignalLabeled:focus-visible {
+  border-color: rgba(250, 204, 21, 0.58);
+  color: #ffffff;
+  outline: none;
+  transform: translateY(-2px);
+}
+
+.galaxySignalLabeled .contactIcon {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+}
+
+.galaxySignalLabeled > span {
+  width: auto;
+  height: auto;
+  display: inline;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  overflow: visible;
+  color: #fff2b8;
+  font-size: inherit;
+  font-weight: inherit;
+  line-height: 1;
+}
+
+.galaxySignalStatic {
+  opacity: 0.72;
+  cursor: default;
 }
 
 .dealerBadge {
@@ -3083,7 +3236,11 @@
   border: 1px solid rgba(216, 180, 254, 0.36);
   border-radius: 999px;
   background:
-    radial-gradient(circle at 20% 50%, rgba(103, 232, 249, 0.13), transparent 32%),
+    radial-gradient(
+      circle at 20% 50%,
+      rgba(103, 232, 249, 0.13),
+      transparent 32%
+    ),
     linear-gradient(90deg, rgba(31, 17, 57, 0.92), rgba(88, 28, 135, 0.72)),
     rgba(12, 8, 30, 0.82);
   box-shadow:
@@ -3105,7 +3262,11 @@
   border: 2px solid rgba(250, 204, 21, 0.48);
   border-radius: 999px;
   background:
-    radial-gradient(circle at 50% 28%, rgba(255, 255, 255, 0.26), transparent 44%),
+    radial-gradient(
+      circle at 50% 28%,
+      rgba(255, 255, 255, 0.26),
+      transparent 44%
+    ),
     rgba(22, 11, 48, 0.92);
   box-shadow:
     inset 0 1px 7px rgba(255, 255, 255, 0.18),
@@ -3164,7 +3325,12 @@
 .arcadeBoard {
   border-radius: 18px;
   background:
-    linear-gradient(135deg, rgba(16, 8, 34, 0.94), rgba(39, 17, 72, 0.82) 54%, rgba(9, 7, 24, 0.94)),
+    linear-gradient(
+      135deg,
+      rgba(16, 8, 34, 0.94),
+      rgba(39, 17, 72, 0.82) 54%,
+      rgba(9, 7, 24, 0.94)
+    ),
     radial-gradient(circle at 86% 18%, rgba(250, 204, 21, 0.2), transparent 28%);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.16),
@@ -3178,8 +3344,15 @@
   border: 0;
   border-radius: inherit;
   background:
-    linear-gradient(90deg, rgba(103, 232, 249, 0.28), transparent 22% 78%, rgba(250, 204, 21, 0.22)) 0 0 / 100% 1px no-repeat,
-    linear-gradient(180deg, rgba(216, 180, 254, 0.18), transparent 44%) 0 0 / 1px 100% no-repeat;
+    linear-gradient(
+        90deg,
+        rgba(103, 232, 249, 0.28),
+        transparent 22% 78%,
+        rgba(250, 204, 21, 0.22)
+      )
+      0 0 / 100% 1px no-repeat,
+    linear-gradient(180deg, rgba(216, 180, 254, 0.18), transparent 44%) 0 0 /
+      1px 100% no-repeat;
 }
 
 .bankLayout,
@@ -3240,8 +3413,16 @@
   border-radius: 16px 16px 10px 34px;
   padding: clamp(22px, 4vw, 34px);
   background:
-    radial-gradient(circle at 82% 18%, rgba(103, 232, 249, 0.18), transparent 28%),
-    radial-gradient(circle at 15% 82%, rgba(250, 204, 21, 0.14), transparent 30%),
+    radial-gradient(
+      circle at 82% 18%,
+      rgba(103, 232, 249, 0.18),
+      transparent 28%
+    ),
+    radial-gradient(
+      circle at 15% 82%,
+      rgba(250, 204, 21, 0.14),
+      transparent 30%
+    ),
     linear-gradient(145deg, rgba(13, 8, 35, 0.94), rgba(54, 22, 96, 0.78));
 }
 
@@ -3262,7 +3443,12 @@
   height: 2px;
   border-radius: 999px;
   content: "";
-  background: linear-gradient(90deg, transparent, rgba(250, 204, 21, 0.9), transparent);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(250, 204, 21, 0.9),
+    transparent
+  );
   box-shadow:
     0 0 18px rgba(250, 204, 21, 0.42),
     0 18px 0 rgba(216, 180, 254, 0.16);
@@ -3283,8 +3469,19 @@
   width: clamp(132px, 34vw, 178px);
   border-radius: 26px;
   background:
-    radial-gradient(circle at 44% 34%, rgba(255, 255, 255, 0.62), rgba(192, 132, 252, 0.46) 36%, rgba(11, 8, 31, 0.9) 72%),
-    conic-gradient(from 28deg, rgba(250, 204, 21, 0.34), rgba(103, 232, 249, 0.2), rgba(192, 132, 252, 0.4), rgba(250, 204, 21, 0.34));
+    radial-gradient(
+      circle at 44% 34%,
+      rgba(255, 255, 255, 0.62),
+      rgba(192, 132, 252, 0.46) 36%,
+      rgba(11, 8, 31, 0.9) 72%
+    ),
+    conic-gradient(
+      from 28deg,
+      rgba(250, 204, 21, 0.34),
+      rgba(103, 232, 249, 0.2),
+      rgba(192, 132, 252, 0.4),
+      rgba(250, 204, 21, 0.34)
+    );
 }
 
 .rewardAmount {
@@ -3307,7 +3504,11 @@
   border-left: 4px solid rgba(192, 132, 252, 0.72);
   border-radius: 12px;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.035)),
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.08),
+      rgba(255, 255, 255, 0.035)
+    ),
     rgba(9, 7, 27, 0.74);
 }
 
@@ -3345,7 +3546,11 @@
   border-radius: 10px;
   padding: 13px 14px;
   background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.035)),
+    linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.1),
+      rgba(255, 255, 255, 0.035)
+    ),
     rgba(24, 13, 50, 0.86);
 }
 
@@ -3383,15 +3588,22 @@
 .field input,
 .cardTopupField select,
 .cardTopupField input {
-  background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.18), rgba(9, 7, 27, 0.72));
+  background: linear-gradient(
+    145deg,
+    rgba(255, 255, 255, 0.18),
+    rgba(9, 7, 27, 0.72)
+  );
   color: #ffffff;
 }
 
 .verifyModal,
 .lifetimeModal {
   background:
-    radial-gradient(circle at 20% 0%, rgba(250, 204, 21, 0.14), transparent 34%),
+    radial-gradient(
+      circle at 20% 0%,
+      rgba(250, 204, 21, 0.14),
+      transparent 34%
+    ),
     linear-gradient(145deg, rgba(14, 8, 34, 0.98), rgba(42, 18, 82, 0.96));
   color: #fff9ff;
 }
@@ -3423,8 +3635,11 @@
 .lifetimeQrSummary,
 .cardTopupSummary,
 .paymentInfoCard {
-  background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.1), rgba(10, 7, 26, 0.82));
+  background: linear-gradient(
+    145deg,
+    rgba(255, 255, 255, 0.1),
+    rgba(10, 7, 26, 0.82)
+  );
   border-color: rgba(216, 180, 254, 0.34);
 }
 
@@ -3454,8 +3669,7 @@
 .cardSubmitButton {
   min-height: 58px;
   border-radius: 12px;
-  background:
-    linear-gradient(135deg, #facc15, #c084fc 42%, #7c3aed);
+  background: linear-gradient(135deg, #facc15, #c084fc 42%, #7c3aed);
   color: #12091f;
   text-shadow: none;
 }
@@ -3488,7 +3702,11 @@
   border-color: rgba(250, 204, 21, 0.36);
   border-radius: 999px;
   background:
-    radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.52), transparent 34%),
+    radial-gradient(
+      circle at 35% 30%,
+      rgba(255, 255, 255, 0.52),
+      transparent 34%
+    ),
     rgba(30, 16, 62, 0.92);
   color: #fff2b8;
   box-shadow:
@@ -3535,8 +3753,16 @@
   position: absolute;
   border: 1px solid rgba(216, 180, 254, 0.36);
   background:
-    radial-gradient(circle at 34% 28%, rgba(255, 255, 255, 0.88) 0 10%, transparent 11%),
-    radial-gradient(circle at 54% 55%, rgba(192, 132, 252, 0.74), rgba(22, 11, 48, 0.72) 68%);
+    radial-gradient(
+      circle at 34% 28%,
+      rgba(255, 255, 255, 0.88) 0 10%,
+      transparent 11%
+    ),
+    radial-gradient(
+      circle at 54% 55%,
+      rgba(192, 132, 252, 0.74),
+      rgba(22, 11, 48, 0.72) 68%
+    );
   box-shadow:
     inset -5px -6px 13px rgba(4, 3, 14, 0.32),
     0 0 22px rgba(192, 132, 252, 0.34);
@@ -3597,22 +3823,23 @@
     border-radius: 24px;
   }
 
-  .galaxySignals a,
-  .galaxySignals span {
-    width: 31px;
-    height: 31px;
+  .galaxySignals > a:not(.galaxySignalLabeled),
+  .galaxySignals > span:not(.galaxySignalLabeled) {
+    width: 28px;
+    height: 28px;
   }
 
   .mastheadActions {
     width: 100%;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
+    align-items: center;
     justify-content: space-between;
-    gap: 8px;
+    gap: 6px;
   }
 
   .dealerBadge {
     position: static;
-    flex: 1 1 174px;
+    flex: 1 1 auto;
     min-width: 0;
     min-height: 48px;
     gap: 7px;
@@ -3621,6 +3848,8 @@
 
   .galaxySignals {
     flex: 0 0 auto;
+    flex-shrink: 0;
+    gap: 5px;
   }
 
   .dealerAvatar {
@@ -3662,8 +3891,8 @@
   object-fit: cover;
 }
 
-.galaxySignals a,
-.galaxySignals span {
+.galaxySignals > a:not(.galaxySignalLabeled),
+.galaxySignals > span:not(.galaxySignalLabeled) {
   overflow: hidden;
   padding: 3px;
 }
@@ -3695,20 +3924,37 @@
 
 .packageHeader {
   display: grid;
-  justify-items: center;
   gap: 14px;
-  text-align: center;
+  width: 100%;
 }
 
-.packageHeader .sectionIntro {
-  grid-template-columns: minmax(0, 1fr);
-  justify-items: center;
-  gap: 8px;
-  text-align: center;
+.packageHeaderTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  gap: 10px;
+  width: 100%;
 }
 
-.packageHeader .sectionIntro p {
-  max-width: 42ch;
+.packageHeaderSide {
+  display: flex;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.packageHeaderSide:first-child {
+  justify-content: flex-start;
+}
+
+.packageHeaderSide:last-child {
+  justify-content: flex-end;
+}
+
+.packageHeaderSide .pillLink {
+  width: auto;
+  min-height: 40px;
+  padding: 0 12px;
+  font-size: 10px;
 }
 
 .currencyIconTabs {
@@ -3720,7 +3966,11 @@
   border: 1px solid rgba(216, 180, 254, 0.28);
   border-radius: 999px;
   background:
-    radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.16), transparent 48%),
+    radial-gradient(
+      circle at 50% 0%,
+      rgba(255, 255, 255, 0.16),
+      transparent 48%
+    ),
     rgba(8, 6, 24, 0.7);
   box-shadow:
     inset 0 1px 12px rgba(255, 255, 255, 0.08),
@@ -3735,7 +3985,11 @@
   border: 1px solid rgba(216, 180, 254, 0.34);
   border-radius: 999px;
   background:
-    radial-gradient(circle at 50% 35%, rgba(255, 255, 255, 0.16), transparent 42%),
+    radial-gradient(
+      circle at 50% 35%,
+      rgba(255, 255, 255, 0.16),
+      transparent 42%
+    ),
     linear-gradient(145deg, rgba(48, 24, 88, 0.92), rgba(18, 9, 42, 0.88));
   box-shadow:
     inset 0 1px 10px rgba(255, 255, 255, 0.1),
@@ -3764,8 +4018,12 @@
 
 .currencyIconTabActive {
   border-color: rgba(250, 204, 21, 0.78);
-  background:
-    radial-gradient(circle at 50% 34%, rgba(255, 255, 255, 0.54) 0 17%, rgba(192, 132, 252, 0.82) 52%, rgba(49, 18, 92, 0.94) 100%);
+  background: radial-gradient(
+    circle at 50% 34%,
+    rgba(255, 255, 255, 0.54) 0 17%,
+    rgba(192, 132, 252, 0.82) 52%,
+    rgba(49, 18, 92, 0.94) 100%
+  );
   box-shadow:
     inset 0 0 18px rgba(255, 255, 255, 0.22),
     0 16px 34px rgba(126, 34, 206, 0.48),
@@ -3783,7 +4041,11 @@
   border: 1px solid rgba(250, 204, 21, 0.28);
   border-radius: 16px;
   background:
-    linear-gradient(135deg, rgba(250, 204, 21, 0.11), rgba(192, 132, 252, 0.16)),
+    linear-gradient(
+      135deg,
+      rgba(250, 204, 21, 0.11),
+      rgba(192, 132, 252, 0.16)
+    ),
     rgba(9, 7, 27, 0.58);
   color: #fff9ff;
   text-align: center;
@@ -3866,20 +4128,80 @@
   }
 
   .bankTopupDock .actionDock {
-    width: min(100%, 760px);
-    grid-template-columns: minmax(160px, 1.18fr) repeat(3, minmax(130px, 1fr));
+    width: min(100%, 420px);
+    grid-template-columns: minmax(0, 1fr);
     gap: 12px;
   }
 }
 
+@media (max-width: 719px) {
+  .bankTopupDock .packageGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .bankTopupDock .packageButton {
+    min-height: 58px;
+    padding: 8px 6px;
+  }
+
+  .bankTopupDock .packageButton strong {
+    font-size: clamp(12px, 3.4vw, 15px);
+  }
+
+  .bankTopupDock .packageButton small {
+    font-size: 10px;
+  }
+
+  .bankTopupDock .actionDock {
+    display: flex;
+    justify-content: center;
+    width: 100%;
+    max-width: none;
+    margin-inline: auto;
+  }
+
+  .bankTopupDock .submitButton {
+    width: min(100%, 320px);
+  }
+}
+
 @media (max-width: 520px) {
-  .galaxySignals a,
-  .galaxySignals span {
+  .galaxySignals a:not(.galaxySignalLabeled),
+  .galaxySignals span:not(.galaxySignalLabeled) {
     padding: 2px;
   }
 
   .packageHeader {
     gap: 12px;
+  }
+
+  .packageHeaderTop {
+    gap: 8px;
+  }
+
+  .packageHeaderSide .pillLink {
+    min-height: 36px;
+    padding: 0 8px;
+    font-size: 9px;
+  }
+
+  .galaxySignalLabeled {
+    min-height: 32px;
+    padding: 0 8px 0 5px;
+    font-size: 9px;
+    gap: 5px;
+  }
+
+  .galaxySignalLabeled .contactIcon {
+    width: 18px;
+    height: 18px;
+  }
+
+  .galaxySignals > a:not(.galaxySignalLabeled),
+  .galaxySignals > span:not(.galaxySignalLabeled) {
+    width: 28px;
+    height: 28px;
   }
 
   .currencyIconTabs {
@@ -3899,10 +4221,6 @@
 
   .bankRewardSummary {
     padding: 12px;
-  }
-
-  .bankTopupDock .actionDock {
-    width: min(100%, 420px);
   }
 }
 

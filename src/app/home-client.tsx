@@ -22,6 +22,7 @@ import styles from "./page.module.css";
 type CurrencyType = RewardType;
 type TopUpMode = "bank" | "card";
 type PaymentStatusKind = "bank" | "card" | "lifetime-bank-qr";
+type PendingVerifyAction = "bank-qr" | "card" | "lifetime-qr";
 type PublicCtvRef = {
   code: string;
   name: string;
@@ -324,20 +325,16 @@ type PaymentInfoRowProps = {
 type LitmatchIdFieldProps = {
   litmatchId: string;
   verifiedLitmatchId: string | null;
-  verifyLoading: boolean;
   verifyError: string;
   onChange: (value: string) => void;
-  onVerify: () => void;
   fieldClassName?: string;
 };
 
 function LitmatchIdField({
   litmatchId,
   verifiedLitmatchId,
-  verifyLoading,
   verifyError,
   onChange,
-  onVerify,
   fieldClassName = styles.field,
 }: LitmatchIdFieldProps) {
   const normalizedId = normalizeLitmatchId(litmatchId);
@@ -347,22 +344,12 @@ function LitmatchIdField({
   return (
     <div className={fieldClassName}>
       <span>ID Litmatch</span>
-      <div className={styles.idFieldRow}>
-        <input
-          aria-label="ID Litmatch"
-          placeholder="Nhập chính xác ID Litmatch"
-          value={litmatchId}
-          onChange={(event) => onChange(event.target.value)}
-        />
-        <button
-          className={styles.verifyButton}
-          type="button"
-          disabled={verifyLoading || !normalizedId}
-          onClick={onVerify}
-        >
-          {verifyLoading ? "Đang kiểm..." : "Kiểm tra"}
-        </button>
-      </div>
+      <input
+        aria-label="ID Litmatch"
+        placeholder="Nhập chính xác ID Litmatch"
+        value={litmatchId}
+        onChange={(event) => onChange(event.target.value)}
+      />
       {verifyError ? (
         <p className={styles.verifyError} role="alert">
           {verifyError}
@@ -441,7 +428,6 @@ type LifetimeBankQrModalProps = {
   onLifetimeTransferContentChange: (value: string) => void;
   onCurrencyChange: (value: CurrencyType) => void;
   onResetQr: () => void;
-  onVerify: () => void;
 };
 
 function LifetimeBankQrModal({
@@ -469,18 +455,13 @@ function LifetimeBankQrModal({
   onLifetimeTransferContentChange,
   onCurrencyChange,
   onResetQr,
-  onVerify,
 }: LifetimeBankQrModalProps) {
   const active = currencyConfig[currency];
   const activeIconClass = `${styles.inlineIcon} ${
     currency === "star" ? styles.starIcon : styles.diamondIcon
   }`;
   const parsedLifetimeContent = ctvRef
-    ? parseCtvLifetimeLitmatchId(
-        lifetimeTransferContent,
-        currency,
-        ctvRef.code,
-      )
+    ? parseCtvLifetimeLitmatchId(lifetimeTransferContent, currency, ctvRef.code)
     : parseLifetimeTransferContent(lifetimeTransferContent);
 
   return (
@@ -713,14 +694,6 @@ function LifetimeBankQrModal({
                   {parsedLifetimeContent.litmatchId || "Chưa đúng format"}
                 </strong>
               </div>
-              <button
-                className={styles.verifyButton}
-                type="button"
-                disabled={verifyLoading || !parsedLifetimeContent.valid}
-                onClick={onVerify}
-              >
-                {verifyLoading ? "Đang kiểm..." : "Kiểm tra"}
-              </button>
             </div>
 
             {verifyError ? (
@@ -772,9 +745,13 @@ function LifetimeBankQrModal({
               <button
                 className={styles.verifyModalConfirm}
                 type="submit"
-                disabled={loading}
+                disabled={loading || verifyLoading}
               >
-                {loading ? "Đang tạo..." : "Tạo QR"}
+                {loading
+                  ? "Đang tạo..."
+                  : verifyLoading
+                    ? "Đang kiểm..."
+                    : "Tạo QR"}
               </button>
             </div>
           </form>
@@ -834,6 +811,8 @@ export default function HomeClient({
     null,
   );
   const [pendingUser, setPendingUser] = useState<VerifiedUserInfo | null>(null);
+  const [pendingVerifyAction, setPendingVerifyAction] =
+    useState<PendingVerifyAction | null>(null);
   const [verifyLoading, setVerifyLoading] = useState(false);
   const [verifyError, setVerifyError] = useState("");
   const [showAnnouncement, setShowAnnouncement] = useState(true);
@@ -922,30 +901,8 @@ export default function HomeClient({
     setLifetimeStatusMessage("");
   }
 
-  async function handleCreateQr() {
-    if (!paymentAmount) {
-      setFormError("Vui lòng chọn gói hoặc nhập số tiền thanh toán.");
-      return;
-    }
-
-    if (!hasBankConfig) {
-      setFormError("Thiếu cấu hình VietQR.");
-      return;
-    }
-
+  async function executeCreateQr() {
     const normalizedId = normalizeLitmatchId(litmatchId);
-
-    if (!normalizedId) {
-      setFormError("Vui lòng nhập ID Litmatch.");
-      return;
-    }
-
-    if (verifiedLitmatchId !== normalizedId) {
-      setFormError(
-        "Vui lòng kiểm tra và xác nhận ID Litmatch trước khi tạo QR.",
-      );
-      return;
-    }
 
     setPaymentLoading(true);
     setFormError("");
@@ -984,6 +941,33 @@ export default function HomeClient({
     } finally {
       setPaymentLoading(false);
     }
+  }
+
+  async function handleCreateQr() {
+    if (!paymentAmount) {
+      setFormError("Vui lòng chọn gói hoặc nhập số tiền thanh toán.");
+      return;
+    }
+
+    if (!hasBankConfig) {
+      setFormError("Thiếu cấu hình VietQR.");
+      return;
+    }
+
+    const normalizedId = normalizeLitmatchId(litmatchId);
+
+    if (!normalizedId) {
+      setFormError("Vui lòng nhập ID Litmatch.");
+      return;
+    }
+
+    if (verifiedLitmatchId === normalizedId) {
+      await executeCreateQr();
+      return;
+    }
+
+    setPendingVerifyAction("bank-qr");
+    await handleVerifyId();
   }
 
   function handleOpenLifetimeQrModal() {
@@ -1104,36 +1088,8 @@ export default function HomeClient({
     setLifetimeStatusMessage("");
   }
 
-  async function handleCreateLifetimeQr() {
-    if (!hasBankConfig) {
-      setLifetimeQrError("Thiếu cấu hình VietQR.");
-      return;
-    }
-
+  async function executeCreateLifetimeQr() {
     const parsedContent = getPreparedLifetimeContent();
-
-    if (!parsedContent.valid) {
-      setLifetimeQrError(
-        ctvRef
-          ? "Vui lòng nhập ID Litmatch hợp lệ từ 5-20 số."
-          : "Nội dung QR trọn đời phải có dạng LMKC IDLITMATCH, LMSAO IDLITMATCH hoặc thêm TENCTV ở giữa.",
-      );
-      return;
-    }
-
-    if (parsedContent.rewardType !== lifetimeCurrency) {
-      setLifetimeQrError(
-        "Loại nhận không khớp nội dung chuyển khoản. LMKC dùng cho kim cương, LMSAO dùng cho sao.",
-      );
-      return;
-    }
-
-    if (verifiedLitmatchId !== parsedContent.litmatchId) {
-      setLifetimeQrError(
-        "Vui lòng kiểm tra và xác nhận ID Litmatch trong nội dung QR trước khi tạo.",
-      );
-      return;
-    }
 
     setLifetimeQrLoading(true);
     setLifetimeQrError("");
@@ -1174,6 +1130,39 @@ export default function HomeClient({
     }
   }
 
+  async function handleCreateLifetimeQr() {
+    if (!hasBankConfig) {
+      setLifetimeQrError("Thiếu cấu hình VietQR.");
+      return;
+    }
+
+    const parsedContent = getPreparedLifetimeContent();
+
+    if (!parsedContent.valid) {
+      setLifetimeQrError(
+        ctvRef
+          ? "Vui lòng nhập ID Litmatch hợp lệ từ 5-20 số."
+          : "Nội dung QR trọn đời phải có dạng LMKC IDLITMATCH, LMSAO IDLITMATCH hoặc thêm TENCTV ở giữa.",
+      );
+      return;
+    }
+
+    if (parsedContent.rewardType !== lifetimeCurrency) {
+      setLifetimeQrError(
+        "Loại nhận không khớp nội dung chuyển khoản. LMKC dùng cho kim cương, LMSAO dùng cho sao.",
+      );
+      return;
+    }
+
+    if (verifiedLitmatchId === parsedContent.litmatchId) {
+      await executeCreateLifetimeQr();
+      return;
+    }
+
+    setPendingVerifyAction("lifetime-qr");
+    await handleVerifyId();
+  }
+
   function handleShowCardMode() {
     setTopUpMode("card");
     setQrPayment(null);
@@ -1191,22 +1180,8 @@ export default function HomeClient({
     setStatusMessage("");
   }
 
-  async function handleCardSubmit() {
-    if (!cardCode.trim() || !cardSerial.trim() || !litmatchId.trim()) {
-      setFormError("Vui lòng nhập đầy đủ mã thẻ, số seri và ID Litmatch.");
-      setCardMessage("");
-      return;
-    }
-
+  async function executeCardSubmit() {
     const normalizedId = normalizeLitmatchId(litmatchId);
-
-    if (verifiedLitmatchId !== normalizedId) {
-      setFormError(
-        "Vui lòng kiểm tra và xác nhận ID Litmatch trước khi nạp thẻ.",
-      );
-      setCardMessage("");
-      return;
-    }
 
     setCardLoading(true);
     setFormError("");
@@ -1251,6 +1226,24 @@ export default function HomeClient({
     }
   }
 
+  async function handleCardSubmit() {
+    if (!cardCode.trim() || !cardSerial.trim() || !litmatchId.trim()) {
+      setFormError("Vui lòng nhập đầy đủ mã thẻ, số seri và ID Litmatch.");
+      setCardMessage("");
+      return;
+    }
+
+    const normalizedId = normalizeLitmatchId(litmatchId);
+
+    if (verifiedLitmatchId === normalizedId) {
+      await executeCardSubmit();
+      return;
+    }
+
+    setPendingVerifyAction("card");
+    await handleVerifyId();
+  }
+
   async function handleVerifyId() {
     const lifetimeContent = getPreparedLifetimeContent();
     const normalizedId = showLifetimeQrModal
@@ -1265,6 +1258,7 @@ export default function HomeClient({
             : "Vui lòng nhập nội dung đúng dạng LMKC IDLITMATCH, LMSAO IDLITMATCH hoặc thêm TENCTV ở giữa."
           : "Vui lòng nhập ID Litmatch.",
       );
+      setPendingVerifyAction(null);
       return;
     }
 
@@ -1288,12 +1282,14 @@ export default function HomeClient({
 
       if (!response.ok || !payload.success || !payload.data) {
         setVerifyError(payload.error ?? "Không xác minh được ID Litmatch.");
+        setPendingVerifyAction(null);
         return;
       }
 
       setPendingUser(payload.data);
     } catch {
       setVerifyError("Không xác minh được ID Litmatch.");
+      setPendingVerifyAction(null);
     } finally {
       setVerifyLoading(false);
     }
@@ -1350,6 +1346,8 @@ export default function HomeClient({
   }
 
   function handleConfirmVerify() {
+    const action = pendingVerifyAction;
+
     if (pendingUser) {
       setVerifiedLitmatchId(pendingUser.targetUid);
       if (!showLifetimeQrModal) {
@@ -1361,10 +1359,28 @@ export default function HomeClient({
     }
 
     setPendingUser(null);
+    setPendingVerifyAction(null);
+
+    if (!pendingUser || !action) {
+      return;
+    }
+
+    if (action === "bank-qr") {
+      void executeCreateQr();
+      return;
+    }
+
+    if (action === "card") {
+      void executeCardSubmit();
+      return;
+    }
+
+    void executeCreateLifetimeQr();
   }
 
   function handleCancelVerify() {
     setPendingUser(null);
+    setPendingVerifyAction(null);
   }
 
   async function handleCopy(value: string, field: string) {
@@ -1428,6 +1444,40 @@ export default function HomeClient({
               </span>
             </span>
             <div className={styles.galaxySignals}>
+              {supportGroupUrl ? (
+                <a
+                  aria-label="Group CSKH"
+                  className={styles.galaxySignalLabeled}
+                  href={supportGroupUrl}
+                  rel="noopener noreferrer"
+                  target="_blank"
+                  title="Group CSKH"
+                >
+                  <Image
+                    alt=""
+                    className={styles.contactIcon}
+                    height={22}
+                    src="/zalo.jpg"
+                    width={22}
+                  />
+                  <span>Group CSKH</span>
+                </a>
+              ) : (
+                <span
+                  aria-label="Group CSKH"
+                  className={`${styles.galaxySignalLabeled} ${styles.galaxySignalStatic}`}
+                  title="Group CSKH"
+                >
+                  <Image
+                    alt=""
+                    className={styles.contactIcon}
+                    height={22}
+                    src="/zalo.jpg"
+                    width={22}
+                  />
+                  <span>Group CSKH</span>
+                </span>
+              )}
               {contactLinks.map((link) => (
                 <a
                   aria-label={link.label}
@@ -1823,10 +1873,8 @@ export default function HomeClient({
                     fieldClassName={styles.cardTopupField}
                     litmatchId={litmatchId}
                     verifiedLitmatchId={verifiedLitmatchId}
-                    verifyLoading={verifyLoading}
                     verifyError={verifyError}
                     onChange={handleLitmatchIdChange}
-                    onVerify={handleVerifyId}
                   />
 
                   {formError ? (
@@ -1866,9 +1914,13 @@ export default function HomeClient({
                   <button
                     className={styles.cardSubmitButton}
                     type="submit"
-                    disabled={cardLoading}
+                    disabled={cardLoading || verifyLoading}
                   >
-                    {cardLoading ? "Đang gửi..." : "Nạp thẻ ngay"}{" "}
+                    {cardLoading
+                      ? "Đang gửi..."
+                      : verifyLoading
+                        ? "Đang kiểm..."
+                        : "Nạp thẻ ngay"}{" "}
                     <span aria-hidden="true">✨</span>
                   </button>
                 </form>
@@ -1885,10 +1937,31 @@ export default function HomeClient({
                 aria-labelledby={`${tabBaseId}-${currency}`}
               >
                 <div className={styles.packageHeader}>
-                  <div className={styles.sectionIntro}>
-                    <div>
-                      <h2>Chọn gói nạp</h2>
-                      <p>Gói nạp nhanh và số tiền tùy chỉnh.</p>
+                  <div className={styles.packageHeaderTop}>
+                    <div className={styles.packageHeaderSide}>
+                      <button
+                        className={styles.pillLink}
+                        type="button"
+                        onClick={handleShowCardMode}
+                      >
+                        <span className={styles.pillIcon} aria-hidden="true">
+                          ▥
+                        </span>
+                        Nạp thẻ cào
+                      </button>
+                    </div>
+
+                    <div className={styles.packageHeaderSide}>
+                      <button
+                        className={styles.pillLink}
+                        type="button"
+                        onClick={handleOpenLifetimeQrModal}
+                      >
+                        <span className={styles.pillIcon} aria-hidden="true">
+                          ∞
+                        </span>
+                        QR trọn đời
+                      </button>
                     </div>
                   </div>
 
@@ -2017,10 +2090,8 @@ export default function HomeClient({
                   <LitmatchIdField
                     litmatchId={litmatchId}
                     verifiedLitmatchId={verifiedLitmatchId}
-                    verifyLoading={verifyLoading}
                     verifyError={verifyError}
                     onChange={handleLitmatchIdChange}
-                    onVerify={handleVerifyId}
                   />
 
                   {formError ? (
@@ -2033,74 +2104,15 @@ export default function HomeClient({
                     <button
                       className={styles.submitButton}
                       type="submit"
-                      disabled={paymentLoading}
+                      disabled={paymentLoading || verifyLoading}
                     >
-                      {paymentLoading ? "Đang tạo..." : "Tạo mã QR"}{" "}
+                      {paymentLoading
+                        ? "Đang tạo..."
+                        : verifyLoading
+                          ? "Đang kiểm..."
+                          : "Tạo mã QR"}{" "}
                       <span aria-hidden="true">⚡</span>
                     </button>
-
-                    <button
-                      className={styles.pillLink}
-                      type="button"
-                      onClick={handleShowCardMode}
-                    >
-                      <span className={styles.pillIcon} aria-hidden="true">
-                        ▥
-                      </span>
-                      Nạp thẻ cào
-                    </button>
-
-                    <button
-                      className={styles.pillLink}
-                      type="button"
-                      onClick={handleOpenLifetimeQrModal}
-                    >
-                      <span className={styles.pillIcon} aria-hidden="true">
-                        ∞
-                      </span>
-                      QR trọn đời
-                    </button>
-
-                    {supportGroupUrl ? (
-                      <a
-                        className={styles.pillLink}
-                        href={supportGroupUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        <span
-                          className={`${styles.pillIcon} ${styles.pillImageIcon}`}
-                          aria-hidden="true"
-                        >
-                          <Image
-                            alt=""
-                            className={styles.contactIcon}
-                            height={22}
-                            src="/zalo.jpg"
-                            width={22}
-                          />
-                        </span>
-                        GROUP CSKH
-                      </a>
-                    ) : (
-                      <span
-                        className={`${styles.pillLink} ${styles.pillStatic}`}
-                      >
-                        <span
-                          className={`${styles.pillIcon} ${styles.pillImageIcon}`}
-                          aria-hidden="true"
-                        >
-                          <Image
-                            alt=""
-                            className={styles.contactIcon}
-                            height={22}
-                            src="/zalo.jpg"
-                            width={22}
-                          />
-                        </span>
-                        GROUP CSKH
-                      </span>
-                    )}
                   </nav>
                 </form>
               </div>
@@ -2143,7 +2155,6 @@ export default function HomeClient({
           onLifetimeTransferContentChange={handleLifetimeTransferContentChange}
           onCurrencyChange={handleLifetimeCurrencyChange}
           onResetQr={handleResetLifetimeQr}
-          onVerify={handleVerifyId}
         />
       ) : null}
 
