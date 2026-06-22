@@ -847,6 +847,17 @@ export default function HomeClient({
   const cardIconClass = `${styles.inlineIcon} ${
     cardCurrency === "star" ? styles.starIcon : styles.diamondIcon
   }`;
+  const qrPaymentCurrency = qrPayment ? currencyConfig[qrPayment.currency] : null;
+  const qrPaymentIconClass = qrPayment
+    ? `${styles.inlineIcon} ${
+        qrPayment.currency === "star" ? styles.starIcon : styles.diamondIcon
+      }`
+    : "";
+  const qrPaymentLabelClass = qrPayment
+    ? qrPayment.currency === "star"
+      ? styles.receiveCurrencyStar
+      : styles.receiveCurrencyDiamond
+    : "";
   const hasBankConfig =
     bankConfig.bankId.trim() &&
     bankConfig.accountNo.trim() &&
@@ -1610,7 +1621,12 @@ export default function HomeClient({
                   <strong>{formatNumber(qrPayment.amount)} đ</strong>
                   <small>
                     Nhận {formatNumber(qrPayment.receiveAmount)}{" "}
-                    {currencyConfig[qrPayment.currency].receiveLabel}
+                    <span className={qrPaymentLabelClass}>
+                      {qrPaymentCurrency?.receiveLabel}{" "}
+                      <span className={qrPaymentIconClass} aria-hidden="true">
+                        {qrPaymentCurrency?.icon}
+                      </span>
+                    </span>
                   </small>
                 </div>
               </div>

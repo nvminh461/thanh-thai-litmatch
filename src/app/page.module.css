@@ -722,7 +722,7 @@
 
 .formTwin {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
 
@@ -1929,7 +1929,7 @@
 .scanSummary {
   display: grid;
   justify-items: center;
-  gap: 3px;
+  gap: 6px;
   text-align: center;
 }
 
@@ -1946,6 +1946,65 @@
   font-size: clamp(24px, 8vw, 34px);
   font-weight: 900;
   line-height: 1;
+}
+
+.receiveCurrencyStar {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: clamp(14px, 4.2vw, 16px);
+  font-weight: 900;
+  letter-spacing: 0.03em;
+  color: #7a4f00;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 244, 170, 0.98) 0%,
+    rgba(255, 214, 58, 0.94) 100%
+  );
+  border: 2px solid #f5b800;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    0 0 0 1px rgba(255, 236, 140, 0.65),
+    0 5px 16px rgba(245, 158, 11, 0.42);
+}
+
+.receiveCurrencyStar .inlineIcon,
+.receiveCurrencyStar .starIcon {
+  font-size: 1.2em;
+  color: #a16207;
+  filter: drop-shadow(0 1px 2px rgba(120, 53, 15, 0.35));
+  text-shadow: none;
+}
+
+.receiveCurrencyDiamond {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: clamp(14px, 4.2vw, 16px);
+  font-weight: 900;
+  letter-spacing: 0.03em;
+  color: #0c4a6e;
+  background: linear-gradient(
+    180deg,
+    rgba(207, 250, 254, 0.98) 0%,
+    rgba(125, 211, 252, 0.94) 100%
+  );
+  border: 2px solid #0ea5e9;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    0 0 0 1px rgba(186, 230, 253, 0.7),
+    0 5px 16px rgba(14, 165, 233, 0.42);
+}
+
+.receiveCurrencyDiamond .inlineIcon {
+  font-size: 1.2em;
+  color: #0369a1;
+  filter: drop-shadow(0 1px 2px rgba(7, 89, 133, 0.35));
+  text-shadow: none;
 }
 
 .paymentInfoCard {
@@ -2526,10 +2585,6 @@
   .receiptPanel,
   .scanStage {
     padding: 18px;
-  }
-
-  .formTwin {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .packageGrid {
@@ -4112,6 +4167,7 @@
 .bankTopupDock .pillLink {
   font-size: 11px;
   line-height: 1.15;
+  padding: 0 48px;
 }
 
 @media (min-width: 720px) {
@@ -4182,7 +4238,7 @@
 
   .packageHeaderSide .pillLink {
     min-height: 36px;
-    padding: 0 8px;
+    padding: 0 38px;
     font-size: 9px;
   }
 
