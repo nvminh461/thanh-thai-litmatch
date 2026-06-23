@@ -460,6 +460,16 @@ function LifetimeBankQrModal({
   const activeIconClass = `${styles.inlineIcon} ${
     currency === "star" ? styles.starIcon : styles.diamondIcon
   }`;
+  const lifetimeQrLabelClass = lifetimeQr
+    ? lifetimeQr.currency === "star"
+      ? styles.receiveCurrencyStar
+      : styles.receiveCurrencyDiamond
+    : "";
+  const lifetimeQrIconClass = lifetimeQr
+    ? `${styles.inlineIcon} ${
+        lifetimeQr.currency === "star" ? styles.starIcon : styles.diamondIcon
+      }`
+    : "";
   const parsedLifetimeContent = ctvRef
     ? parseCtvLifetimeLitmatchId(lifetimeTransferContent, currency, ctvRef.code)
     : parseLifetimeTransferContent(lifetimeTransferContent);
@@ -510,9 +520,12 @@ function LifetimeBankQrModal({
               <div className={styles.lifetimeQrSummary}>
                 <span>ID Litmatch {lifetimeQr.litmatchId}</span>
                 <strong>
-                  Nhận {currencyConfig[lifetimeQr.currency].label}{" "}
-                  <span className={activeIconClass} aria-hidden="true">
-                    {currencyConfig[lifetimeQr.currency].icon}
+                  Nhận{" "}
+                  <span className={lifetimeQrLabelClass}>
+                    {currencyConfig[lifetimeQr.currency].label}{" "}
+                    <span className={lifetimeQrIconClass} aria-hidden="true">
+                      {currencyConfig[lifetimeQr.currency].icon}
+                    </span>
                   </span>
                 </strong>
                 <small>Người dùng tự nhập số tiền trong app ngân hàng.</small>
