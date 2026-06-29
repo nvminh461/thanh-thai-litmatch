@@ -62,7 +62,7 @@ export const defaultCardRate: RateConfig = {
 };
 
 export const packagePrices = [
-  10000, 50000, 100000, 200000, 300000, 400000, 500000, 1000000, 2000000,
+  20000, 50000, 100000, 200000, 300000, 400000, 500000, 1000000, 2000000,
   3000000, 5000000, 10000000,
 ];
 export const cardDenominations = [
