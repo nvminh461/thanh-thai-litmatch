@@ -860,7 +860,9 @@ export default function HomeClient({
   const cardIconClass = `${styles.inlineIcon} ${
     cardCurrency === "star" ? styles.starIcon : styles.diamondIcon
   }`;
-  const qrPaymentCurrency = qrPayment ? currencyConfig[qrPayment.currency] : null;
+  const qrPaymentCurrency = qrPayment
+    ? currencyConfig[qrPayment.currency]
+    : null;
   const qrPaymentIconClass = qrPayment
     ? `${styles.inlineIcon} ${
         qrPayment.currency === "star" ? styles.starIcon : styles.diamondIcon
@@ -1554,7 +1556,10 @@ export default function HomeClient({
 
             <div className={styles.qrLayout}>
               <div className={styles.scanStage}>
-                <span className={styles.scanPill}>QR sẵn sàng</span>
+                <span className={styles.scanPill}>
+                  Mã QR chỉ cung cấp cho thanh toán lần này, vui lòng không sao
+                  lưu sử dụng cho những lần thanh toán sau
+                </span>
                 <div className={styles.qrFrame}>
                   <span className={`${styles.qrSticker} ${styles.qrJellyLeft}`}>
                     ☾
@@ -2139,7 +2144,7 @@ export default function HomeClient({
                         ? "Đang tạo..."
                         : verifyLoading
                           ? "Đang kiểm..."
-                          : "Tạo mã QR"}{" "}
+                          : "Xác nhận & Thanh toán"}{" "}
                       <span aria-hidden="true">⚡</span>
                     </button>
                   </nav>
