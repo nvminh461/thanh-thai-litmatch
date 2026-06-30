@@ -3,6 +3,7 @@ import { getAdminSession } from "@/server/admin-auth";
 import {
   PaymentNotFoundError,
   PaymentValidationError,
+  syncEasyPosOrderForDirectRecharge,
   syncEasyPosOrderForSePayPayment,
 } from "@/server/payment-repository";
 
@@ -18,16 +19,25 @@ export async function POST(request: Request) {
 
   try {
     const body = (await request.json()) as {
+      paymentType?: unknown;
       paymentId?: unknown;
     };
+    const paymentType = body.paymentType === "direct" ? "direct" : "bank";
 
     return NextResponse.json({
       success: true,
-      data: await syncEasyPosOrderForSePayPayment({
-        paymentId: body.paymentId,
-        source: "admin",
-        adminUsername: session.username,
-      }),
+      data:
+        paymentType === "direct"
+          ? await syncEasyPosOrderForDirectRecharge({
+              paymentId: body.paymentId,
+              source: "admin",
+              adminUsername: session.username,
+            })
+          : await syncEasyPosOrderForSePayPayment({
+              paymentId: body.paymentId,
+              source: "admin",
+              adminUsername: session.username,
+            }),
     });
   } catch (error) {
     if (error instanceof PaymentNotFoundError) {

@@ -66,6 +66,10 @@ type StatusFilter = "all" | AdminPaymentStatus;
 type DirectStatusFilter = "all" | AdminDirectRechargeRow["status"];
 type BlacklistStatusFilter = "all" | AdminBankQrBlacklistStatus;
 type PaymentKind = "bank" | "card";
+type EasyPosSyncPaymentType = "bank" | "direct";
+type EasyPosOrderStatus =
+  | AdminBankPaymentRow["easyposOrderStatus"]
+  | AdminDirectRechargeRow["easyposOrderStatus"];
 type BankFilterState = {
   status: StatusFilter;
   litmatchId: string;
@@ -280,9 +284,7 @@ function rechargeStatusLabel(value: AdminBankPaymentRow["rechargeStatus"]) {
   return "";
 }
 
-function easyposOrderStatusLabel(
-  value: AdminBankPaymentRow["easyposOrderStatus"],
-) {
+function easyposOrderStatusLabel(value: EasyPosOrderStatus) {
   if (value === "completed") {
     return "Đã sync";
   }
@@ -298,9 +300,7 @@ function easyposOrderStatusLabel(
   return "Chưa sync";
 }
 
-function easyposOrderStatusClassName(
-  value: AdminBankPaymentRow["easyposOrderStatus"],
-) {
+function easyposOrderStatusClassName(value: EasyPosOrderStatus) {
   if (value === "completed") {
     return styles.statusCompleted;
   }
@@ -1480,7 +1480,10 @@ export default function AdminDashboard({
     }
   }
 
-  async function syncEasyPosOrder(paymentId: string) {
+  async function syncEasyPosOrder(
+    paymentId: string,
+    paymentType: EasyPosSyncPaymentType = "bank",
+  ) {
     setEasyposSyncingId(paymentId);
     setEasyposOrderMessage("");
     setEasyposOrderError("");
@@ -1491,7 +1494,7 @@ export default function AdminDashboard({
         headers: {
           "content-type": "application/json",
         },
-        body: JSON.stringify({ paymentId }),
+        body: JSON.stringify({ paymentId, paymentType }),
       });
       const payload = (await response.json()) as EasyPosOrderSyncResponse;
 
@@ -1506,6 +1509,17 @@ export default function AdminDashboard({
             payment.id === payload.data?.payment?.id
               ? payload.data.payment
               : payment,
+          ),
+        }));
+      }
+
+      if (payload.data.directRecharge) {
+        setDirectPageData((current) => ({
+          ...current,
+          rows: current.rows.map((row) =>
+            row.id === payload.data?.directRecharge?.id
+              ? payload.data.directRecharge
+              : row,
           ),
         }));
       }
@@ -2526,6 +2540,17 @@ export default function AdminDashboard({
               </div>
             </div>
 
+            {easyposOrderError ? (
+              <p className={styles.errorText} role="alert">
+                {easyposOrderError}
+              </p>
+            ) : null}
+            {easyposOrderMessage ? (
+              <p className={styles.successText} role="status">
+                {easyposOrderMessage}
+              </p>
+            ) : null}
+
             <div className={styles.filters} aria-label="Bộ lọc nạp trực tiếp">
               <label className={styles.filterField}>
                 <span>Trạng thái</span>
@@ -2655,6 +2680,8 @@ export default function AdminDashboard({
                     <th>Số lượng</th>
                     <th>Admin</th>
                     <th>Ghi chú</th>
+                    <th>Hóa đơn</th>
+                    <th>Lỗi ĐH</th>
                     <th>Thao tác</th>
                     <th>Lỗi</th>
                     <th>Cập nhật</th>
@@ -2685,21 +2712,49 @@ export default function AdminDashboard({
                         </td>
                         <td data-label="Admin">{row.adminUsername}</td>
                         <td data-label="Ghi chú">{row.note ?? "-"}</td>
-                        <td data-label="Thao tác">
-                          <button
-                            className={styles.inlineActionButton}
-                            type="button"
-                            onClick={() =>
-                              setDirectNoteEdit({
-                                id: row.id,
-                                note: row.note ?? "",
-                                loading: false,
-                                error: "",
-                              })
-                            }
+                        <td data-label="Hóa đơn">
+                          <span
+                            className={`${styles.statusBadge} ${easyposOrderStatusClassName(
+                              row.easyposOrderStatus,
+                            )}`}
                           >
-                            Sửa ghi chú
-                          </button>
+                            {easyposOrderStatusLabel(row.easyposOrderStatus)}
+                          </span>
+                        </td>
+                        <td data-label="Lỗi ĐH" className={styles.errorCell}>
+                          {row.easyposOrderError ?? "-"}
+                        </td>
+                        <td data-label="Thao tác">
+                          <div className={styles.inlineActions}>
+                            {row.canSyncEasyposOrder ? (
+                              <button
+                                className={styles.inlineActionButton}
+                                type="button"
+                                disabled={easyposSyncingId === row.id}
+                                onClick={() =>
+                                  syncEasyPosOrder(row.id, "direct")
+                                }
+                              >
+                                {easyposSyncingId === row.id
+                                  ? "Đang sync..."
+                                  : "Sync ĐH"}
+                              </button>
+                            ) : null}
+                            <button
+                              className={styles.inlineActionButton}
+                              type="button"
+                              onClick={() =>
+                                setDirectNoteEdit({
+                                  id: row.id,
+                                  note: row.note ?? "",
+                                  loading: false,
+                                  error: "",
+                                })
+                              }
+                            >
+                              Sửa ghi chú
+                            </button>
+                          </div>
                         </td>
                         <td data-label="Lỗi" className={styles.errorCell}>
                           {row.rechargeError ?? "-"}
@@ -2711,7 +2766,7 @@ export default function AdminDashboard({
                     ))
                   ) : (
                     <tr>
-                      <td colSpan={10} className={styles.emptyCell}>
+                      <td colSpan={12} className={styles.emptyCell}>
                         {hasDirectFilters
                           ? "Không có lịch sử nạp trực tiếp phù hợp bộ lọc."
                           : "Chưa có lịch sử nạp trực tiếp."}

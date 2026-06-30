@@ -264,10 +264,14 @@ export type AdminDirectRechargeRow = {
   verifiedUser: AdminTargetUserInfo | null;
   rewardType: RewardType;
   rewardAmount: number;
+  amount: number | null;
   note: string | null;
   rechargeStatus: AdminDirectRechargeStatus;
   rechargeError: string | null;
   rechargeCompletedAt: string | null;
+  easyposOrderStatus: "pending" | "completed" | "failed" | null;
+  easyposOrderError: string | null;
+  canSyncEasyposOrder: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -296,4 +300,5 @@ export type AdminEasyPosOrderSyncResult = {
   status: "completed" | "failed" | "skipped";
   message: string;
   payment?: AdminBankPaymentRow;
+  directRecharge?: AdminDirectRechargeRow;
 };

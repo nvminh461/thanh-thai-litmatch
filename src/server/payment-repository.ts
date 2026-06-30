@@ -25,6 +25,7 @@ import type {
 } from "@/lib/admin-types";
 import {
   buildVietQrUrl,
+  calculatePaymentAmountFromReward,
   calculateReceiveAmount,
   cardDenominations,
   cardProviders,
@@ -269,6 +270,7 @@ export type AdminDirectRechargeDocument = {
   };
   rewardType: RewardType;
   rewardAmount: number;
+  amount?: number;
   note?: string;
   recharge: {
     targetUid: string;
@@ -280,6 +282,21 @@ export type AdminDirectRechargeDocument = {
     requestedAt: Date;
     completedAt?: Date;
     failedAt?: Date;
+  };
+  easyposOrder?: {
+    status: EasyPosOrderStatus;
+    productId: number;
+    quantity: number;
+    amount: number;
+    keys: EasyPosBillKeys;
+    request?: EasyPosBillPayload;
+    response?: unknown;
+    error?: string;
+    requestedAt: Date;
+    completedAt?: Date;
+    failedAt?: Date;
+    syncedBy?: EasyPosSyncSource;
+    adminUsername?: string;
   };
   createdAt: Date;
   updatedAt: Date;
@@ -635,6 +652,26 @@ function canSyncEasyPosOrder(payment: BankPaymentDocument) {
   );
 }
 
+function canSyncDirectEasyPosOrder(recharge: AdminDirectRechargeDocument) {
+  if (!isEasyPosEnabled() || recharge.status !== "completed") {
+    return false;
+  }
+
+  const easyposOrder = recharge.easyposOrder;
+
+  if (!easyposOrder || easyposOrder.status === "failed") {
+    return true;
+  }
+
+  if (easyposOrder.status === "completed") {
+    return false;
+  }
+
+  return (
+    easyposOrder.requestedAt.getTime() + EASYPOS_PENDING_STALE_MS < Date.now()
+  );
+}
+
 function canRetryCardRecharge(payment: CardPaymentDocument) {
   return (
     payment.status === "recharge_failed" &&
@@ -881,10 +918,14 @@ function serializeDirectRecharge(
       : null,
     rewardType: recharge.rewardType,
     rewardAmount: recharge.rewardAmount,
+    amount: recharge.amount ?? null,
     note: recharge.note ?? null,
     rechargeStatus: recharge.recharge.status,
     rechargeError: recharge.recharge.error ?? null,
     rechargeCompletedAt: serializeDate(recharge.recharge.completedAt),
+    easyposOrderStatus: recharge.easyposOrder?.status ?? null,
+    easyposOrderError: recharge.easyposOrder?.error ?? null,
+    canSyncEasyposOrder: canSyncDirectEasyPosOrder(recharge),
     createdAt: recharge.createdAt.toISOString(),
     updatedAt: recharge.updatedAt.toISOString(),
   };
@@ -2559,6 +2600,18 @@ async function getSerializedBankPaymentById(paymentId: ObjectId) {
   return serializeBankPayment(payment);
 }
 
+async function getSerializedDirectRechargeById(rechargeId: ObjectId) {
+  const directRecharges =
+    await getCollection<AdminDirectRechargeDocument>("admin_direct_recharges");
+  const recharge = await directRecharges.findOne({ _id: rechargeId });
+
+  if (!recharge) {
+    throw new PaymentNotFoundError();
+  }
+
+  return serializeDirectRecharge(recharge);
+}
+
 function isEasyPosOrderPendingStale(
   payment: BankPaymentDocument,
   now: Date,
@@ -2775,6 +2828,211 @@ export async function syncEasyPosOrderForSePayPayment(input: {
   }
 }
 
+function isDirectEasyPosOrderPendingStale(
+  recharge: AdminDirectRechargeDocument,
+  now: Date,
+) {
+  return (
+    recharge.easyposOrder?.status === "pending" &&
+    recharge.easyposOrder.requestedAt.getTime() + EASYPOS_PENDING_STALE_MS <
+      now.getTime()
+  );
+}
+
+export async function syncEasyPosOrderForDirectRecharge(input: {
+  paymentId?: unknown;
+  source: EasyPosSyncSource;
+  adminUsername?: string;
+}): Promise<AdminEasyPosOrderSyncResult> {
+  const rechargeId = normalizePaymentObjectIdInput(input.paymentId);
+  const directRecharges =
+    await getCollection<AdminDirectRechargeDocument>("admin_direct_recharges");
+  const recharge = await directRecharges.findOne({ _id: rechargeId });
+
+  if (!recharge) {
+    throw new PaymentNotFoundError();
+  }
+
+  if (recharge.status !== "completed") {
+    throw new PaymentValidationError(
+      "Chỉ sync ĐH cho lịch sử nạp trực tiếp đã nạp thành công.",
+    );
+  }
+
+  if (!isEasyPosEnabled()) {
+    return {
+      status: "skipped",
+      message: "EasyPos chưa được bật.",
+      directRecharge: serializeDirectRecharge(recharge),
+    };
+  }
+
+  if (recharge.easyposOrder?.status === "completed") {
+    return {
+      status: "completed",
+      message: "ĐH EasyPos đã được sync.",
+      directRecharge: serializeDirectRecharge(recharge),
+    };
+  }
+
+  const now = new Date();
+
+  if (
+    recharge.easyposOrder?.status === "pending" &&
+    !isDirectEasyPosOrderPendingStale(recharge, now)
+  ) {
+    return {
+      status: "skipped",
+      message: "ĐH EasyPos đang được sync.",
+      directRecharge: serializeDirectRecharge(recharge),
+    };
+  }
+
+  let config: ReturnType<typeof getEasyPosConfig>;
+
+  try {
+    config = getEasyPosConfig();
+  } catch (error) {
+    return {
+      status: "failed",
+      message: getEasyPosOrderErrorMessage(error),
+      directRecharge: serializeDirectRecharge(recharge),
+    };
+  }
+
+  const runtimeConfig = await getRuntimeConfig();
+  const amount =
+    recharge.amount ??
+    calculatePaymentAmountFromReward(
+      recharge.rewardAmount,
+      recharge.rewardType,
+      runtimeConfig.bankRate,
+    );
+  const keys =
+    recharge.easyposOrder?.keys ??
+    buildEasyPosBillKeys({ taxAuthorityPrefix: config.taxAuthorityPrefix, now });
+  const buildInput = {
+    rewardType: recharge.rewardType,
+    quantity: recharge.rewardAmount,
+    amount,
+    keys,
+  };
+  const request = buildEasyPosBillPayload(buildInput);
+  const metadata = getEasyPosBillMetadata(buildInput);
+  const staleBefore = new Date(now.getTime() - EASYPOS_PENDING_STALE_MS);
+  const claimResult = await directRecharges.updateOne(
+    {
+      _id: rechargeId,
+      status: "completed",
+      $or: [
+        { easyposOrder: { $exists: false } },
+        { "easyposOrder.status": "failed" },
+        {
+          "easyposOrder.status": "pending",
+          "easyposOrder.requestedAt": { $lt: staleBefore },
+        },
+      ],
+    },
+    {
+      $set: {
+        amount,
+        updatedAt: now,
+        "easyposOrder.status": "pending",
+        "easyposOrder.productId": metadata.productId,
+        "easyposOrder.quantity": metadata.quantity,
+        "easyposOrder.amount": metadata.amount,
+        "easyposOrder.keys": keys,
+        "easyposOrder.request": request,
+        "easyposOrder.requestedAt": now,
+        "easyposOrder.syncedBy": input.source,
+        ...(input.adminUsername
+          ? { "easyposOrder.adminUsername": input.adminUsername }
+          : {}),
+      },
+      $unset: {
+        "easyposOrder.response": "",
+        "easyposOrder.error": "",
+        "easyposOrder.completedAt": "",
+        "easyposOrder.failedAt": "",
+      },
+    },
+  );
+
+  if (!claimResult.modifiedCount) {
+    const current = await directRecharges.findOne({ _id: rechargeId });
+
+    if (!current) {
+      throw new PaymentNotFoundError();
+    }
+
+    return {
+      status:
+        current.easyposOrder?.status === "completed" ? "completed" : "skipped",
+      message:
+        current.easyposOrder?.status === "completed"
+          ? "ĐH EasyPos đã được sync."
+          : "ĐH EasyPos đang được sync.",
+      directRecharge: serializeDirectRecharge(current),
+    };
+  }
+
+  try {
+    const result = await createEasyPosBill(request);
+    const completedAt = new Date();
+
+    await directRecharges.updateOne(
+      {
+        _id: rechargeId,
+        "easyposOrder.status": "pending",
+        "easyposOrder.keys.idempotencyKey": keys.idempotencyKey,
+      },
+      {
+        $set: {
+          updatedAt: completedAt,
+          "easyposOrder.status": "completed",
+          "easyposOrder.response": result.response,
+          "easyposOrder.completedAt": completedAt,
+        },
+        $unset: {
+          "easyposOrder.error": "",
+          "easyposOrder.failedAt": "",
+        },
+      },
+    );
+
+    return {
+      status: "completed",
+      message: "Đã sync ĐH EasyPos.",
+      directRecharge: await getSerializedDirectRechargeById(rechargeId),
+    };
+  } catch (error) {
+    const failedAt = new Date();
+    const message = getEasyPosOrderErrorMessage(error);
+
+    await directRecharges.updateOne(
+      {
+        _id: rechargeId,
+        "easyposOrder.status": "pending",
+        "easyposOrder.keys.idempotencyKey": keys.idempotencyKey,
+      },
+      {
+        $set: {
+          updatedAt: failedAt,
+          "easyposOrder.status": "failed",
+          "easyposOrder.error": message,
+          "easyposOrder.failedAt": failedAt,
+        },
+      },
+    );
+
+    return {
+      status: "failed",
+      message,
+      directRecharge: await getSerializedDirectRechargeById(rechargeId),
+    };
+  }
+}
+
 async function trySyncEasyPosOrderAfterSePayCompleted(paymentId: ObjectId) {
   try {
     await syncEasyPosOrderForSePayPayment({
@@ -2818,6 +3076,12 @@ export async function createDirectAdminRecharge(input: {
   adminUsername: string;
 }): Promise<AdminRechargeResult> {
   const preview = await previewDirectAdminRecharge(input);
+  const config = await getRuntimeConfig();
+  const amount = calculatePaymentAmountFromReward(
+    preview.rewardAmount,
+    preview.rewardType,
+    config.bankRate,
+  );
   const now = new Date();
   const collection =
     await getCollection<AdminDirectRechargeDocument>("admin_direct_recharges");
@@ -2831,6 +3095,7 @@ export async function createDirectAdminRecharge(input: {
     },
     rewardType: preview.rewardType,
     rewardAmount: preview.rewardAmount,
+    amount,
     ...(preview.note ? { note: preview.note } : {}),
     recharge: {
       targetUid: preview.verifiedUser.targetUid,
